@@ -2587,6 +2587,7 @@ doc/man/Makefile
 doc/man/en/Makefile
 doc/hackersguide/Makefile
 doc/faq/Makefile
+contrib/Makefile
 include/Makefile
 include/xine.h
 lib/Makefile
@@ -2622,15 +2623,6 @@ src/libdts/Makefile
 src/libfaad/Makefile
 src/libfaad/codebook/Makefile
 src/libffmpeg/Makefile
-src/libffmpeg/libavcodec/Makefile
-src/libffmpeg/libavcodec/armv4l/Makefile
-src/libffmpeg/libavcodec/i386/Makefile
-src/libffmpeg/libavcodec/mlib/Makefile
-src/libffmpeg/libavcodec/alpha/Makefile
-src/libffmpeg/libavcodec/ppc/Makefile
-src/libffmpeg/libavcodec/sparc/Makefile
-src/libffmpeg/libavcodec/libpostproc/Makefile
-src/libffmpeg/libavutil/Makefile
 src/libflac/Makefile
 src/liblpcm/Makefile
 src/libmad/Makefile

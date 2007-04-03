@@ -48,11 +48,7 @@
 #include "xine_decoder.h"
 #include "mpeg_parser.h"
 
-#ifdef HAVE_FFMPEG
-#  include <postprocess.h>
-#else
-#  include "libavcodec/libpostproc/postprocess.h"
-#endif
+#include <postprocess.h>
 
 #define VIDEOBUFSIZE        (128*1024)
 #define SLICE_BUFFER_SIZE   (1194*1024)
