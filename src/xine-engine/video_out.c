@@ -71,6 +71,7 @@ typedef struct {
   vo_frame_t        *first;
   vo_frame_t        *last;
   int                num_buffers;
+  int                num_buffers_max;
 
   int                locked_for_read;
   pthread_mutex_t    mutex;
@@ -128,8 +129,10 @@ typedef struct {
 
   int                       current_width, current_height;
   int64_t                   current_duration;
+  int                       frame_drop_limit_max;
   int                       frame_drop_limit;
   int                       frame_drop_cpt;
+  int                       frame_drop_suggested;
   int                       crop_left, crop_right, crop_top, crop_bottom;
   pthread_mutex_t           trigger_drawing_mutex;
   pthread_cond_t            trigger_drawing_cond;
@@ -147,9 +150,11 @@ static img_buf_fifo_t *vo_new_img_buf_queue () {
 
   queue = (img_buf_fifo_t *) xine_xmalloc (sizeof (img_buf_fifo_t));
   if( queue ) {
-    queue->first       = NULL;
-    queue->last        = NULL;
-    queue->num_buffers = 0;
+    queue->first           = NULL;
+    queue->last            = NULL;
+    queue->num_buffers     = 0;
+    queue->num_buffers_max = 0;
+
     queue->locked_for_read = 0;
     pthread_mutex_init (&queue->mutex, NULL);
     pthread_cond_init  (&queue->not_empty, NULL);
@@ -176,6 +181,8 @@ static void vo_append_to_img_buf_queue_int (img_buf_fifo_t *queue,
   }
 
   queue->num_buffers++;
+  if (queue->num_buffers_max < queue->num_buffers)
+    queue->num_buffers_max = queue->num_buffers;
 
   pthread_cond_signal (&queue->not_empty);
 }
@@ -216,14 +223,15 @@ static vo_frame_t *vo_remove_from_img_buf_queue_int (img_buf_fifo_t *queue, int 
       
       if( width && height ) {
         if( !img ) {
-          if( queue->num_buffers == 1 && !blocking) {
+          if( queue->num_buffers == 1 && !blocking && queue->num_buffers_max > 8) {
             /* non-blocking and only a single frame on fifo with different
              * format -> ignore it (give another chance of a frame format hit)
+             * only if we have a lot of buffers at all.
              */
             lprintf("frame format mismatch - will wait another frame\n");
           } else {
-            /* we have at least 2 frames on fifo but they don't match ->
-             * give up. return whatever we got.
+            /* we have just a limited number of buffers or at least 2 frames
+             * on fifo but they don't match -> give up. return whatever we got.
              */
             img = queue->first;
             lprintf("frame format miss (%d/%d)\n", i, queue->num_buffers);
@@ -470,28 +478,46 @@ static int vo_frame_draw (vo_frame_t *img, xine_stream_t *stream) {
       duration = img->duration;
     
     /* Frame dropping slow start:
-     *   The engine starts to drop frames if there is less than frame_drop_limit
+     *   The engine starts to drop frames if there are less than frame_drop_limit
      *   frames in advance. There might be a problem just after a seek because
      *   there is no frame in advance yet.
      *   The following code increases progressively the frame_drop_limit (-2 -> 3)
      *   after a seek to give a chance to the engine to display the first frames
-     *   smootly before starting to drop frames if the decoder is really too
+     *   smoothly before starting to drop frames if the decoder is really too
      *   slow.
+     *   The above numbers are the result of frame_drop_limit_max beeing 3. They
+     *   will be (-4 -> 1) when frame_drop_limit_max is only 1. This maximum value
+     *   depends on the number of video buffers which the output device provides.
      */
     if (stream && stream->first_frame_flag == 2)
       this->frame_drop_cpt = 10;
 
     if (this->frame_drop_cpt) {
-      this->frame_drop_limit = 3 - (this->frame_drop_cpt / 2);
+      this->frame_drop_limit = this->frame_drop_limit_max - (this->frame_drop_cpt / 2);
       this->frame_drop_cpt--;
     }
     frames_to_skip = ((-1 * diff) / duration + this->frame_drop_limit) * 2;
 
     /* do not skip decoding until output fifo frames are consumed */
-    if (this->display_img_buf_queue->num_buffers > this->frame_drop_limit ||
+    if (this->display_img_buf_queue->num_buffers >= this->frame_drop_limit ||
         frames_to_skip < 0)
       frames_to_skip = 0;
       
+    /* Do not drop frames immediately, but remember this as suggestion and give
+     * decoder a further chance to supply frames.
+     * This avoids unnecessary frame drops in situations where there is only
+     * a very little number of image buffers, e. g. when using xxmc.
+     */
+    if (this->frame_drop_suggested && frames_to_skip == 0)
+      this->frame_drop_suggested = 0;
+
+    if (frames_to_skip > 0) {
+      if (!this->frame_drop_suggested) {
+        this->frame_drop_suggested = 1;
+        frames_to_skip = 0;
+      }
+    }
+
     lprintf ("delivery diff : %" PRId64 ", current vpts is %" PRId64 ", %d frames to skip\n",
 	     diff, cur_vpts, frames_to_skip);
     
@@ -1829,8 +1855,6 @@ xine_video_port_t *_x_vo_new_port (xine_t *xine, vo_driver_t *driver, int grabon
   this->overlay_source->init (this->overlay_source);
   this->overlay_enabled       = 1;
 
-  this->frame_drop_limit      = 3;
-  this->frame_drop_cpt        = 0;
 
   /* default number of video frames from config */
   num_frame_buffers = xine->config->register_num (xine->config,
@@ -1850,6 +1874,24 @@ xine_video_port_t *_x_vo_new_port (xine_t *xine, vo_driver_t *driver, int grabon
   /* we need at least 5 frames */
   if (num_frame_buffers<5) 
     num_frame_buffers = 5;
+
+  /* Choose a frame_drop_limit which matches num_frame_buffers.
+   * xxmc for example supplies only 8 buffers. 2 are occupied by
+   * MPEG2 decoding, further 2 for displaying and the remaining 4 can
+   * hardly be filled all the time.
+   * The below constants reserve buffers for decoding, displaying and
+   * buffer fluctuation.
+   * A frame_drop_limit_max below 1 will disable frame drops at all.
+   */
+  this->frame_drop_limit_max  = num_frame_buffers - 2 - 2 - 1;
+  if (this->frame_drop_limit_max < 1)
+    this->frame_drop_limit_max = 1;
+  else if (this->frame_drop_limit_max > 3)
+    this->frame_drop_limit_max = 3;
+
+  this->frame_drop_limit      = this->frame_drop_limit_max;
+  this->frame_drop_cpt        = 0;
+  this->frame_drop_suggested  = 0;
 
   this->extra_info_base = calloc (num_frame_buffers,
 					  sizeof(extra_info_t));
