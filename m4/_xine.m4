@@ -44,60 +44,6 @@ AC_DEFUN([AC_C_ALWAYS_INLINE],
     fi
 ])
 
-dnl
-dnl Check for minimum version of libtool
-dnl AC_PREREQ_LIBTOOL([MINIMUM VERSION],[ACTION-IF-FOUND [, ACTION-IF-NOT-FOUND ]])
-AC_DEFUN([AC_PREREQ_LIBTOOL],
-  [
-    lt_min_full=ifelse([$1], ,1.3.5,$1)
-    lt_min=`echo $lt_min_full | sed -e 's/\.//g'`
-    AC_MSG_CHECKING(for libtool >= $lt_min_full)
-    lt_version="`grep '^VERSION' $srcdir/ltmain.sh | sed -e 's/VERSION\=//g;s/[[-.a-zA-Z]]//g'`"
-
-    if test $lt_version -lt 100 ; then
-      lt_version=`expr $lt_version \* 10`
-    fi
-
-    if test $lt_version -lt $lt_min ; then
-      AC_MSG_RESULT(no)
-      ifelse([$3], , :, [$3])
-    fi
-    AC_MSG_RESULT(yes)
-    ifelse([$2], , :, [$2])
-  ])
-
-dnl
-AC_DEFUN([AC_CHECK_LIRC],
-  [AC_ARG_ENABLE(lirc,
-     AS_HELP_STRING([--disable-lirc], [turn off LIRC support]),
-     enable_lirc=$enableval, enable_lirc=yes)
-
-  if test x"$enable_lirc" = xyes; then
-     have_lirc=yes
-     AC_REQUIRE_CPP
-     AC_CHECK_LIB(lirc_client,lirc_init,
-           AC_CHECK_HEADER(lirc/lirc_client.h, true, have_lirc=no), have_lirc=no)
-     if test "$have_lirc" = "yes"; then
-
-        if test x"$LIRC_PREFIX" != "x"; then
-           lirc_libprefix="$LIRC_PREFIX/lib"
-  	   LIRC_INCLUDE="-I$LIRC_PREFIX/include"
-        fi
-        for llirc in $lirc_libprefix /lib /usr/lib /usr/local/lib; do
-          AC_CHECK_FILE("$llirc/liblirc_client.a",
-             LIRC_LIBS="$llirc/liblirc_client.a"
-             AC_DEFINE(HAVE_LIRC),,)
-        done
-     else
-         AC_MSG_RESULT([*** LIRC client support not available, LIRC support will be disabled ***]);
-     fi
-  fi
-
-     AC_SUBST(LIRC_LIBS)
-     AC_SUBST(LIRC_INCLUDE)
-])
-
-
 dnl AC_LINUX_PATH(DEFAULT PATH)
 AC_DEFUN([AC_LINUX_PATH],
   [AC_ARG_WITH(linux-path,
@@ -141,36 +87,6 @@ AC_DEFUN([AC_CHECK_DXR3],
     have_dxr3=no
   fi
 ])
-
-dnl AC_TRY_CFLAGS (CFLAGS, [ACTION-IF-WORKS], [ACTION-IF-FAILS])
-dnl check if $CC supports a given set of cflags
-AC_DEFUN([AC_TRY_CFLAGS],
-    [AC_MSG_CHECKING([if $CC supports $1 flags])
-    SAVE_CFLAGS="$CFLAGS"
-    CFLAGS="$1"
-    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],[ac_cv_try_cflags_ok=yes],[ac_cv_try_cflags_ok=no])
-    CFLAGS="$SAVE_CFLAGS"
-    AC_MSG_RESULT([$ac_cv_try_cflags_ok])
-    if test x"$ac_cv_try_cflags_ok" = x"yes"; then
-        ifelse([$2],[],[:],[$2])
-    else
-        ifelse([$3],[],[:],[$3])
-    fi])
-
-dnl AC_TRY_LDFLAGS (CFLAGS, [ACTION-IF-WORKS], [ACTION-IF-FAILS])
-dnl check if $CC supports a given set of ldflags
-AC_DEFUN([AC_TRY_LDFLAGS],
-    [AC_MSG_CHECKING([if $CC supports $1 flags])
-    SAVE_LDFLAGS="$LDFLAGS"
-    LDFLAGS="$1"
-    AC_LINK_IFELSE([AC_LANG_PROGRAM([[]], [[]])],[ac_cv_try_ldflags_ok=yes],[ac_cv_try_ldflags_ok=no])
-    LDFLAGS="$SAVE_LDFLAGS"
-    AC_MSG_RESULT([$ac_cv_try_ldflags_ok])
-    if test x"$ac_cv_try_ldflags_ok" = x"yes"; then
-        ifelse([$2],[],[:],[$2])
-    else
-        ifelse([$3],[],[:],[$3])
-    fi])
 
 dnl AC_CHECK_GENERATE_INTTYPES_H (INCLUDE-DIRECTORY)
 dnl generate a default inttypes.h if the header file does not exist already
