@@ -1,24 +1,21 @@
 include $(top_srcdir)/misc/Makefile.common
 
-SUBDIRS = libcdio libvcd
+AM_CFLAGS  = $(DEFAULT_OCFLAGS) $(LIBCDIO_CFLAGS) $(LIBVCD_CFLAGS)
+AM_LDFLAGS = $(xineplug_ldflags)
 
-vcd_SRCS = xineplug_inp_vcd.c vcdplayer.c vcdio.c xine-extra.c
+SUBDIRS =
+if !WITH_EXTERNAL_VCDLIBS
+SUBDIRS += libcdio libvcd
+endif
 
-EXTRA_DIST = $(vcd_SRCS)
+noinst_HEADERS = vcdio.h vcdplayer.h xine-extra.h
 
-if ENABLE_VCD
 xineplug_LTLIBRARIES = xineplug_inp_vcd.la
 
-AM_CFLAGS = $(LIBCDIO_CFLAGS) $(LIBVCD_CFLAGS)
+xineplug_inp_vcd_la_SOURCES = xineplug_inp_vcd.c vcdplayer.c vcdio.c xine-extra.c
 
-xineplug_inp_vcd_la_SOURCES = $(vcd_SRCS)
-xineplug_inp_vcd_la_LDFLAGS = -avoid-version -module
-if HAVE_VCDNAV
+if WITH_EXTERNAL_VCDLIBS
 xineplug_inp_vcd_la_LIBADD = $(XINE_LIB) $(LIBVCDINFO_LIBS)
 else
 xineplug_inp_vcd_la_LIBADD = $(XINE_LIB) $(LIBVCD_LIBS) $(LIBVCDINFO_LIBS) -lm
 endif
-
-endif
-
-noinst_HEADERS = vcdio.h vcdplayer.h xine-extra.h
