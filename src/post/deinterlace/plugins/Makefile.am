@@ -28,11 +28,20 @@ EXTRA_DIST = greedy2frame_template.c greedyh.asm \
 	tomsmocomp/TomsMoCompAll2.inc tomsmocomp/WierdBob.inc \
 	tomsmocomp/tomsmocompmacros.h x86-64_macros.inc
 
-# libpostproc is here so we can use their nice mangle.h
-AM_CFLAGS = -I$(top_srcdir)/src/post/deinterlace \
-	-I$(top_srcdir)/contrib/ffmpeg/libpostproc
+noinst_HEADERS = plugins.h greedyhmacros.h
 
-noinst_LTLIBRARIES = libdeinterlaceplugins.la
+# libpostproc is here so we can use their nice mangle.h
+AM_CFLAGS   = $(VISIBILITY_FLAG)
+AM_CPPFLAGS = -I$(top_srcdir)/src/post/deinterlace \
+	      -I$(top_srcdir)/contrib/ffmpeg/libpostproc
+
+# per-object CFLAGS -- drop optimization on kdetv_greedyh.c so that gcc
+# doesn't run out of general registers trying to compile it.
+
+noinst_LTLIBRARIES = libdeinterlacepluginsO1.la libdeinterlaceplugins.la
+
+libdeinterlacepluginsO1_la_SOURCES = kdetv_greedyh.c
+libdeinterlacepluginsO1_la_CFLAGS = $(AM_CFLAGS) $(O1_CFLAGS)
 
 libdeinterlaceplugins_la_SOURCES = \
 	double.c \
@@ -43,10 +52,7 @@ libdeinterlaceplugins_la_SOURCES = \
 	weave.c \
 	greedy2frame.c \
 	scalerbob.c \
-	kdetv_greedyh.c \
 	kdetv_tomsmocomp.c
-libdeinterlaceplugins_la_LIBADD = $(XINE_LIB)
-libdeinterlaceplugins_la_CFLAGS = $(VISIBILITY_FLAG) $(AM_CFLAGS)
-libdeinterlaceplugins_la_LDFLAGS = -avoid-version -module
-
-noinst_HEADERS = plugins.h greedyhmacros.h
+libdeinterlaceplugins_la_LIBADD = libdeinterlacepluginsO1.la $(XINE_LIB)
+libdeinterlaceplugins_la_CFLAGS = $(AM_CFLAGS) $(DEFAULT_OCFLAGS)
+libdeinterlaceplugins_la_LDFLAGS = $(AM_LDFLAGS) $(xineplug_ldflags)
