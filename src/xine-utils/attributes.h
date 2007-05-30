@@ -32,18 +32,6 @@
 #define ATTR_ALIGN(align)
 #endif
 
-/* disable GNU __attribute__ extension, when not compiling with GNU C */
-#if defined(__GNUC__) || defined (__ICC)
-#ifndef ATTRIBUTE_PACKED
-#define	ATTRIBUTE_PACKED 1
-#endif 
-#else
-#undef	ATTRIBUTE_PACKED
-#ifndef __attribute__
-#define	__attribute__(x)	/**/
-#endif /* __attribute __*/
-#endif
-
 #ifdef XINE_COMPILE
 # include "config.h"
 #endif
@@ -81,6 +69,18 @@
 # define XINE_FORMAT_PRINTF_ARG(fmt) __attribute__((format_arg(fmt)))
 #else
 # define XINE_FORMAT_PRINTF_ARG(fmt)
+#endif
+
+#ifdef SUPPORT_ATTRIBUTE_PACKED
+# define XINE_PACKED __attribute__((packed))
+#else
+# define XINE_PACKED
+#endif
+
+#ifdef SUPPORT_ATTRIBUTE_MALLOC
+# define XINE_MALLOC __attribute__((__malloc__))
+#else
+# define XINE_MALLOC
 #endif
 
 #endif /* ATTRIBUTE_H_ */
