@@ -322,3 +322,43 @@ AC_DEFUN([CC_ATTRIBUTE_ALIGNED], [
        [Define the highest alignment supported])
   fi
 ])
+
+AC_DEFUN([CC_ATTRIBUTE_PACKED], [
+  AC_REQUIRE([CC_CHECK_WERROR])
+  AC_CACHE_CHECK([if $CC supports __attribute__((packed))],
+    [cc_cv_attribute_packed],
+    [ac_save_CFLAGS="$CFLAGS"
+     CFLAGS="$CFLAGS $cc_cv_werror"
+     AC_COMPILE_IFELSE([struct { char a; short b; int c; } __attribute__((packed)) foo;],
+       [cc_cv_attribute_packed=yes],
+       [cc_cv_attribute_packed=no])
+     CFLAGS="$ac_save_CFLAGS"
+    ])
+
+  if test x$cc_cv_attribute_packed = xyes; then
+    AC_DEFINE([SUPPORT_ATTRIBUTE_PACKED], 1, [Define this if the compiler supports __attribute__((packed))])
+    ifelse([$1], , [:], [$1])
+  else
+    ifelse([$2], , [:], [$2])
+  fi
+])
+
+AC_DEFUN([CC_ATTRIBUTE_MALLOC], [
+  AC_REQUIRE([CC_CHECK_WERROR])
+  AC_CACHE_CHECK([if $CC supports __attribute__((__malloc__))],
+    [cc_cv_attribute_malloc],
+    [ac_save_CFLAGS="$CFLAGS"
+     CFLAGS="$CFLAGS $cc_cv_werror"
+     AC_COMPILE_IFELSE([void *fooalloc(int size) __attribute__((__malloc__));],
+       [cc_cv_attribute_malloc=yes],
+       [cc_cv_attribute_malloc=no])
+     CFLAGS="$ac_save_CFLAGS"
+    ])
+
+  if test x$cc_cv_attribute_malloc = xyes; then
+    AC_DEFINE([SUPPORT_ATTRIBUTE_MALLOC], 1, [Define this if the compiler supports __attribute__((__malloc__))])
+    ifelse([$1], , [:], [$1])
+  else
+    ifelse([$2], , [:], [$2])
+  fi
+])
