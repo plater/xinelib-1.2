@@ -2,10 +2,17 @@ syntax: glob
 *~
 *.orig
 
+xine-lib-*.tar.gz
+xine-lib-*.tar.bz2
+
+*.o
+*.a
 *.lo
 *.la
-.libs/*
+*.so
+.libs
 .deps/*
+.depend
 Makefile
 Makefile.in
 
@@ -34,16 +41,24 @@ build-stamp
 configure-stamp
 debian/files
 debian/libxine-dev
-debian/libxine1
-debian/libxine1-dbg
+debian/libxine2
+debian/libxine2-dbg
 debian/tmp
 debian/*.debhelper
 debian/*.substvars
+
+contrib/ffmpeg/*.pc
+contrib/ffmpeg/config.err
+contrib/ffmpeg/config.mak
+contrib/ffmpeg/doc/*.1
+contrib/ffmpeg/doc/*.html
+contrib/ffmpeg/version.h
 
 doc/faq/faq.html
 doc/faq/faq.txt
 doc/hackersguide/*.png
 doc/hackersguide/hackersguide.html
+doc/Doxyfile
 
 include/xine.h
 
