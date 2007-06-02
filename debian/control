@@ -25,7 +25,7 @@ Standards-Version: 3.7.2
 Package: libxine-dev
 Architecture: any
 Section: libdevel
-Depends: libxine1 (= ${Source-Version}), libc6-dev, zlib1g-dev | libz-dev, libslang2-dev | slang1-dev, libfreetype6-dev
+Depends: libxine2 (= ${Source-Version}), libc6-dev, zlib1g-dev | libz-dev, libslang2-dev | slang1-dev, libfreetype6-dev
 Conflicts: xine-ui (<< 0.9.10), libxine2-dev
 Description: the xine video player library, development packages
  This contains development files (headers, documentation and the like)
@@ -42,11 +42,12 @@ Description: the xine video player library, development packages
  The xine-ui and gxine packages each provide one for your convenience, so
  you can just start watching your VCDs ;-)
 
-Package: libxine1-doc
+Package: libxine2-doc
 Architecture: all
 Section: libdevel
 Provides: libxine-doc
-Conflicts: libxine2-doc
+Conflicts: libxine1-doc
+Replaces: libxine1-doc
 Description: the xine video player library, development packages
  This contains documentation for the xine library (libxine).
  .
@@ -57,10 +58,10 @@ Description: the xine video player library, development packages
  extensible to your heart's content via plugins for audio and video output,
  input media, demuxers (stream types), audio/video and subtitle codecs.
 
-Package: libxine1
+Package: libxine2
 Architecture: any
 Depends: ${shlibs:Depends}
-Recommends: ${shlibs:Recommends}, libxine1-doc | libxine-doc
+Recommends: ${shlibs:Recommends}, libxine2-doc | libxine-doc
 Suggests: ${shlibs:Suggests}, libartsc0
 Description: the xine video/media player library, binary files
  This is the xine media player library (libxine). 
@@ -76,10 +77,10 @@ Description: the xine video/media player library, binary files
  The xine-ui and gxine packages each provide one for your convenience, so
  you can just start watching your VCDs ;-)
 
-Package: libxine1-dbg
+Package: libxine2-dbg
 Priority: extra
 Architecture: any
-Depends: libxine1 (= ${Source-Version})
+Depends: libxine2 (= ${Source-Version})
 Description: the xine video/media player library, debug data
  This is the xine media player library (libxine). 
  .
