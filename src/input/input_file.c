@@ -144,7 +144,7 @@ static int check_mmap_file(file_input_plugin_t *this) {
 }
 #endif
 
-static off_t file_plugin_read (input_plugin_t *this_gen, char *buf, off_t len) {
+static off_t file_plugin_read (input_plugin_t *this_gen, void *buf, off_t len) {
   file_input_plugin_t *this = (file_input_plugin_t *) this_gen;
 
 #ifdef HAVE_MMAP
@@ -730,9 +730,9 @@ static xine_mrl_t **file_class_get_dir (input_class_t *this_gen,
     return NULL;
   }
   
-  dir_files  = (xine_mrl_t *) xine_xmalloc(sizeof(xine_mrl_t) * MAXFILES);
-  hide_files = (xine_mrl_t *) xine_xmalloc(sizeof(xine_mrl_t) * MAXFILES);
-  norm_files = (xine_mrl_t *) xine_xmalloc(sizeof(xine_mrl_t) * MAXFILES);
+  dir_files  = (xine_mrl_t *) xine_xcalloc(MAXFILES, sizeof(xine_mrl_t));
+  hide_files = (xine_mrl_t *) xine_xcalloc(MAXFILES, sizeof(xine_mrl_t));
+  norm_files = (xine_mrl_t *) xine_xcalloc(MAXFILES, sizeof(xine_mrl_t));
   
   while((pdirent = readdir(pdir)) != NULL) {
     
