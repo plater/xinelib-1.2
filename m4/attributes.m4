@@ -50,6 +50,24 @@ AC_DEFUN([CC_CHECK_CFLAGS], [
   fi
 ])
 
+AC_DEFUN([CC_CHECK_LDFLAGS], [
+  AC_CACHE_CHECK([if $CC supports $1 flag],
+    AS_TR_SH([cc_cv_ldflags_$1]),
+    [ac_save_LDFLAGS="$LDFLAGS"
+     LDFLAGS="$LDFLAGS $1"
+     AC_LINK_IFELSE([int a;],
+       [eval "AS_TR_SH([cc_cv_ldflags_$1])='yes'"],
+       [eval "AS_TR_SH([cc_cv_ldflags_$1])="])
+     LDFLAGS="$ac_save_LDFLAGS"
+    ])
+
+  if eval test [x$]AS_TR_SH([cc_cv_ldflags_$1]) = xyes; then
+    ifelse([$2], , [:], [$2])
+  else
+    ifelse([$3], , [:], [$3])
+  fi
+])
+
 dnl Check for a -Werror flag or equivalent. -Werror is the GCC
 dnl and ICC flag that tells the compiler to treat all the warnings
 dnl as fatal. We usually need this option to make sure that some
@@ -321,4 +339,91 @@ AC_DEFUN([CC_ATTRIBUTE_ALIGNED], [
      AC_DEFINE_UNQUOTED([ATTRIBUTE_ALIGNED_MAX], [$cc_cv_attribute_aligned],
        [Define the highest alignment supported])
   fi
+])
+
+AC_DEFUN([CC_ATTRIBUTE_PACKED], [
+  AC_REQUIRE([CC_CHECK_WERROR])
+  AC_CACHE_CHECK([if $CC supports __attribute__((packed))],
+    [cc_cv_attribute_packed],
+    [ac_save_CFLAGS="$CFLAGS"
+     CFLAGS="$CFLAGS $cc_cv_werror"
+     AC_COMPILE_IFELSE([struct { char a; short b; int c; } __attribute__((packed)) foo;],
+       [cc_cv_attribute_packed=yes],
+       [cc_cv_attribute_packed=no])
+     CFLAGS="$ac_save_CFLAGS"
+    ])
+
+  if test x$cc_cv_attribute_packed = xyes; then
+    AC_DEFINE([SUPPORT_ATTRIBUTE_PACKED], 1, [Define this if the compiler supports __attribute__((packed))])
+    ifelse([$1], , [:], [$1])
+  else
+    ifelse([$2], , [:], [$2])
+  fi
+])
+
+AC_DEFUN([CC_ATTRIBUTE_MALLOC], [
+  AC_REQUIRE([CC_CHECK_WERROR])
+  AC_CACHE_CHECK([if $CC supports __attribute__((__malloc__))],
+    [cc_cv_attribute_malloc],
+    [ac_save_CFLAGS="$CFLAGS"
+     CFLAGS="$CFLAGS $cc_cv_werror"
+     AC_COMPILE_IFELSE([void *fooalloc(int size) __attribute__((__malloc__));],
+       [cc_cv_attribute_malloc=yes],
+       [cc_cv_attribute_malloc=no])
+     CFLAGS="$ac_save_CFLAGS"
+    ])
+
+  if test x$cc_cv_attribute_malloc = xyes; then
+    AC_DEFINE([SUPPORT_ATTRIBUTE_MALLOC], 1, [Define this if the compiler supports __attribute__((__malloc__))])
+    ifelse([$1], , [:], [$1])
+  else
+    ifelse([$2], , [:], [$2])
+  fi
+])
+
+
+dnl AC_C_ALWAYS_INLINE
+dnl Define inline to something appropriate, including the new always_inline
+dnl attribute from gcc 3.1
+dnl Thanks to Michel LESPINASSE <walken@zoy.org>
+dnl __inline__ "check" added by Darren Salt
+AC_DEFUN([AC_C_ALWAYS_INLINE], [
+    AC_C_INLINE
+    if test x"$GCC" = x"yes" -a x"$ac_cv_c_inline" = x"inline"; then
+        AC_MSG_CHECKING([for always_inline])
+        SAVE_CFLAGS="$CFLAGS"
+        CFLAGS="$CFLAGS -Wall -Werror"
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[inline __attribute__ ((__always_inline__)) void f (void);]])],
+            [ac_cv_always_inline=yes],[ac_cv_always_inline=no])
+        CFLAGS="$SAVE_CFLAGS"
+        AC_MSG_RESULT([$ac_cv_always_inline])
+        if test x"$ac_cv_always_inline" = x"yes"; then
+            AH_TOP([
+#ifdef inline
+/* the strange formatting below is needed to prevent config.status from rewriting it */
+#  undef \
+     inline
+#endif
+            ])
+            AC_DEFINE_UNQUOTED([inline],[inline __attribute__ ((__always_inline__))])
+        fi
+	ac_cv_c___inline__=''
+    else
+	# FIXME: test the compiler to see if it supports __inline__
+	#	 instead of assuming that if it isn't gcc, it doesn't
+	case "$ac_cv_c_inline" in
+	    yes)
+		ac_cv_c___inline__=inline
+		;;
+	    inline|__inline__)
+		ac_cv_c___inline__=''
+		;;
+	    *)
+		ac_cv_c___inline__="$ac_cv_c_inline"
+		;;
+	esac
+    fi
+    if test x"$ac_cv_c___inline__" != x; then
+	AC_DEFINE_UNQUOTED([__inline__],[$ac_cv_c___inline__],[Define if the compiler doesn't recognise __inline__])
+    fi
 ])

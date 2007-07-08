@@ -165,14 +165,10 @@ static void xxmc_xvmc_surface_handler_construct(xxmc_driver_t *this)
   xvmc_surface_handler_t *handler = &this->xvmc_surf_handler;
 
   pthread_mutex_init(&handler->mutex,NULL);
-  for (i=0; i<XVMC_MAX_SURFACES; ++i) {
-    handler->surfInUse[i] = 0;
-    handler->surfValid[i] = 0;
-  }
-  for (i=0; i<XVMC_MAX_SUBPICTURES; ++i) {
-    handler->subInUse[i] = 0;
-    handler->subValid[i] = 0;
-  }
+  memset(handler->surfInUse, 0, sizeof(*handler->surfInUse)*XVMC_MAX_SURFACES);
+  memset(handler->surfValid, 0, sizeof(*handler->surfValid)*XVMC_MAX_SURFACES);
+  memset(handler->subInUse, 0, sizeof(*handler->subInUse)*XVMC_MAX_SUBPICTURES);
+  memset(handler->subValid, 0, sizeof(*handler->subValid)*XVMC_MAX_SUBPICTURES);
 }
 
 static void xxmc_xvmc_destroy_surfaces(xxmc_driver_t *this)
@@ -242,7 +238,7 @@ static XvMCSurface *xxmc_xvmc_alloc_surface(xxmc_driver_t *this,
       }
       XVMCUNLOCKDISPLAY( this->display );
       xprintf (this->xine, XINE_VERBOSITY_DEBUG,
-	       "video_out_xxmc: Created surface %d\n",i);
+	       LOG_MODULE ": Created surface %d\n",i);
       handler->surfInUse[i] = 1;
       handler->surfValid[i] = 1;
       pthread_mutex_unlock(&handler->mutex);
@@ -262,7 +258,7 @@ static void xxmc_xvmc_free_surface(xxmc_driver_t *this, XvMCSurface *surf)
   if (index >= XVMC_MAX_SURFACES) return; 
   pthread_mutex_lock(&handler->mutex);
   xprintf (this->xine, XINE_VERBOSITY_DEBUG,
-	   "video_out_xxmc: Disposing of surface %d\n",index);
+	   LOG_MODULE ": Disposing of surface %d\n",index);
   handler->surfInUse[index]--;
   xxmc_xvmc_dump_surfaces(this);
   pthread_mutex_unlock(&handler->mutex);
@@ -322,7 +318,7 @@ static XvMCSubpicture *xxmc_xvmc_alloc_subpicture
       }
       XVMCUNLOCKDISPLAY( this->display );
       xprintf (this->xine, XINE_VERBOSITY_DEBUG,
-	       "video_out_xxmc: Created subpicture %d\n",i);
+	       LOG_MODULE ": Created subpicture %d\n",i);
       handler->subInUse[i] = 1;
       handler->subValid[i] = 1;
       pthread_mutex_unlock(&handler->mutex);
@@ -343,7 +339,7 @@ static void xxmc_xvmc_free_subpicture(xxmc_driver_t *this, XvMCSubpicture *sub)
   if (index >= XVMC_MAX_SUBPICTURES) return; 
   pthread_mutex_lock(&handler->mutex);
   xprintf (this->xine, XINE_VERBOSITY_DEBUG,
-	   "video_out_xxmc: Disposing of subpicture %d\n",index);
+	   LOG_MODULE ": Disposing of subpicture %d\n",index);
   handler->subInUse[index] = 0;
   xxmc_xvmc_dump_subpictures(this);
   pthread_mutex_unlock(&handler->mutex);
@@ -647,8 +643,9 @@ static XvImage *create_ximage (xxmc_driver_t *this, XShmSegmentInfo *shminfo,
 
     if (image == NULL )  {
       xprintf(this->xine, XINE_VERBOSITY_LOG,
-	      _("video_out_xxmc: XvShmCreateImage failed\n"
-		"video_out_xxmc: => not using MIT Shared Memory extension.\n"));
+	      _("%s: XvShmCreateImage failed\n"), LOG_MODULE);
+      xprintf(this->xine, XINE_VERBOSITY_LOG,
+	      _("%s: => not using MIT Shared Memory extension.\n"), LOG_MODULE);
       this->use_shm = 0;
       goto finishShmTesting;
     }
@@ -657,16 +654,18 @@ static XvImage *create_ximage (xxmc_driver_t *this, XShmSegmentInfo *shminfo,
 
     if (image->data_size==0) {
       xprintf(this->xine, XINE_VERBOSITY_LOG,
-	      _("video_out_xxmc: XvShmCreateImage returned a zero size\n"
-		"video_out_xxmc: => not using MIT Shared Memory extension.\n"));
+	      _("%s: XvShmCreateImage returned a zero size\n"), LOG_MODULE);
+      xprintf(this->xine, XINE_VERBOSITY_LOG,
+	      _("%s: => not using MIT Shared Memory extension.\n"), LOG_MODULE);
       this->use_shm = 0;
       goto finishShmTesting;
     }
 
     if (shminfo->shmid < 0 ) {
       xprintf(this->xine, XINE_VERBOSITY_LOG,
-	      _("video_out_xxmc: shared memory error in shmget: %s\n"
-		"video_out_xxmc: => not using MIT Shared Memory extension.\n"), strerror(errno));
+	      _("%s: shared memory error in shmget: %s\n"), LOG_MODULE, strerror(errno));
+      xprintf(this->xine, XINE_VERBOSITY_LOG,
+	      _("%s: => not using MIT Shared Memory extension.\n"), LOG_MODULE);
       this->use_shm = 0;
       goto finishShmTesting;
     }
@@ -675,14 +674,14 @@ static XvImage *create_ximage (xxmc_driver_t *this, XShmSegmentInfo *shminfo,
 
     if (shminfo->shmaddr == NULL) {
       xprintf(this->xine, XINE_VERBOSITY_DEBUG,
-	      "video_out_xxmc: shared memory error (address error NULL)\n");
+	      LOG_MODULE ": shared memory error (address error NULL)\n");
       this->use_shm = 0;
       goto finishShmTesting;
     }
 
     if (shminfo->shmaddr == ((char *) -1)) {
       xprintf(this->xine, XINE_VERBOSITY_DEBUG,
-	      "video_out_xxmc: shared memory error (address error)\n");
+	      LOG_MODULE ": shared memory error (address error)\n");
       this->use_shm = 0;
       goto finishShmTesting;
     }
@@ -696,12 +695,13 @@ static XvImage *create_ximage (xxmc_driver_t *this, XShmSegmentInfo *shminfo,
     shmctl(shminfo->shmid, IPC_RMID, 0);
 
     if (gX11Fail) {
-      xprintf(this->xine, XINE_VERBOSITY_LOG,
-	      _("video_out_xxmc: x11 error during shared memory XImage creation\n"
-		"video_out_xxmc: => not using MIT Shared Memory extension.\n"));
       shmdt (shminfo->shmaddr);
       shmctl (shminfo->shmid, IPC_RMID, 0);
       shminfo->shmid = -1;
+      xprintf(this->xine, XINE_VERBOSITY_LOG,
+	      _("%s: x11 error during shared memory XImage creation\n"), LOG_MODULE);
+      xprintf(this->xine, XINE_VERBOSITY_LOG,
+	      _("%s: => not using MIT Shared Memory extension.\n"), LOG_MODULE);
       this->use_shm  = 0;
       goto finishShmTesting;
     }
@@ -766,13 +766,13 @@ static void xxmc_dispose_context(xxmc_driver_t *driver)
     }
     
     xprintf(driver->xine, XINE_VERBOSITY_LOG,
-	    "video_out_xxmc: Freeing up XvMC Surfaces and subpictures.\n");
+	    LOG_MODULE ": Freeing up XvMC Surfaces and subpictures.\n");
     if (driver->xvmc_palette) free(driver->xvmc_palette);
     _x_dispose_xx44_palette( &driver->palette );
     xxmc_xvmc_destroy_subpictures( driver );
     xxmc_xvmc_destroy_surfaces( driver );
     xprintf(driver->xine, XINE_VERBOSITY_LOG,
-	    "video_out_xxmc: Freeing up XvMC Context.\n");
+	    LOG_MODULE ": Freeing up XvMC Context.\n");
     XLockDisplay (driver->display);
     if (driver->subImage) 
       dispose_ximage(driver, &driver->subShmInfo, driver->subImage); 
@@ -812,10 +812,10 @@ static int xxmc_find_context(xxmc_driver_t *driver, xine_xxmc_t *xxmc,
     curCap = driver->xvmc_cap;
     for (i =0; i < driver->xvmc_num_cap; ++i) {
       xprintf(driver->xine, XINE_VERBOSITY_LOG,
-	      "video_out_xxmc: Surface type %d. Capabilities 0x%8x 0x%8x\n",i,
+	      LOG_MODULE ": Surface type %d. Capabilities 0x%8x 0x%8x\n",i,
 	      curCap->mpeg_flags,curCap->accel_flags);
       xprintf(driver->xine, XINE_VERBOSITY_LOG,
-	      "video_out_xxmc:   Requests: 0x%8x 0x%8x\n",
+	      LOG_MODULE ":   Requests: 0x%8x 0x%8x\n",
 	      request_mpeg_flags,request_accel_flags);
       if (((curCap->mpeg_flags & request_mpeg_flags) == request_mpeg_flags) &&
 	  ((curCap->accel_flags & request_accel_flags)) &&
@@ -846,7 +846,7 @@ static int xxmc_create_context(xxmc_driver_t *driver, unsigned width, unsigned h
 
   curCap = driver->xvmc_cap + driver->xvmc_cur_cap;
   xprintf(driver->xine, XINE_VERBOSITY_LOG,
-	  "video_out_xxmc: Creating new XvMC Context %d\n",curCap->type_id);
+	  LOG_MODULE ": Creating new XvMC Context %d\n",curCap->type_id);
   XVMCLOCKDISPLAY( driver->display );
   if (Success == XvMCCreateContext( driver->display, driver->xv_port, 
 				    curCap->type_id, width,
@@ -879,7 +879,7 @@ static void xxmc_setup_subpictures(xxmc_driver_t *driver, unsigned width, unsign
 
     if ((driver->xvmc_backend_subpic = (curCap->flags & XVMC_BACKEND_SUBPICTURE))) 
       xprintf(driver->xine, XINE_VERBOSITY_LOG,
-	      "video_out_xxmc: Using Backend subpictures.\n");
+	      LOG_MODULE ": Using Backend subpictures.\n");
     
     if (!driver->subImage) {
       /*
@@ -895,7 +895,7 @@ static void xxmc_setup_subpictures(xxmc_driver_t *driver, unsigned width, unsign
       XUnlockDisplay (driver->display);
       if (NULL == driver->subImage) {
 	xprintf(driver->xine, XINE_VERBOSITY_LOG,
-		"video_out_xxmc: Failed allocating XvImage for supbictures.\n");
+		LOG_MODULE ": Failed allocating XvImage for supbictures.\n");
 	return;
       }
     }
@@ -990,8 +990,8 @@ static int xxmc_xvmc_update_context(xxmc_driver_t *driver, xxmc_frame_t *frame,
     return 0;
 
   xprintf(driver->xine, XINE_VERBOSITY_LOG,
-	  "video_out_xxmc: New format. Need to change XvMC Context.\n"
-	  "width: %d height: %d", width, height);
+	  LOG_MODULE ": New format. Need to change XvMC Context.\n"
+	  LOG_MODULE ": width: %d height: %d", width, height);
   if (frame_format_xxmc) {
     xprintf(driver->xine, XINE_VERBOSITY_LOG,
 	  " mpeg: %d acceleration: %d", xxmc->mpeg, xxmc->acceleration);
@@ -1011,17 +1011,17 @@ static int xxmc_xvmc_update_context(xxmc_driver_t *driver, xxmc_frame_t *frame,
     if ((driver->xvmc_accel & 
 	 (XINE_XVMC_ACCEL_MOCOMP | XINE_XVMC_ACCEL_IDCT))) {
       if (!xxmc_mocomp_create_macroblocks(driver, frame, 1)) {
-	lprintf("video_out_xxmc: ERROR: Macroblock allocation failed\n");
+	printf(LOG_MODULE ": ERROR: Macroblock allocation failed\n");
 	xxmc_dispose_context( driver );
       }
     }
   }
 
   if (!driver->contextActive) {
-    printf("video_out_xxmc: Using software decoding for this stream.\n");
+    printf(LOG_MODULE ": Using software decoding for this stream.\n");
     driver->xvmc_accel = 0;
   } else {
-    printf("video_out_xxmc: Using hardware decoding for this stream.\n");
+    printf(LOG_MODULE ": Using hardware decoding for this stream.\n");
   }
     
   driver->xvmc_mpeg = xxmc->mpeg;
@@ -1057,9 +1057,9 @@ static void xxmc_frame_updates(xxmc_driver_t *driver,
   if (frame->xvmc_surf == NULL) {
     if (NULL == (frame->xvmc_surf = 
 		 xxmc_xvmc_alloc_surface( driver, &driver->context))) {
-      fprintf(stderr, "video_out_xxmc: ERROR: Accelerated surface allocation failed.\n"
-	      "video_out_xxmc: You are probably out of framebuffer memory.\n"
-	      "video_out_xxmc: Falling back to software decoding.\n");
+      fprintf(stderr, LOG_MODULE ": ERROR: Accelerated surface allocation failed.\n"
+	      LOG_MODULE ": You are probably out of framebuffer memory.\n"
+	      LOG_MODULE ": Falling back to software decoding.\n");
       driver->xvmc_accel = 0;
       xxmc_dispose_context( driver );
       return;
@@ -1747,7 +1747,7 @@ static int xxmc_get_property (vo_driver_t *this_gen, int property) {
     break;
   }
 
-  lprintf("video_out_xxmc: property #%d = %d\n", property, this->props[property].value);
+  lprintf("%s: property #%d = %d\n", LOG_MODULE, property, this->props[property].value);
 
   return this->props[property].value;
 }
@@ -1810,7 +1810,7 @@ static int xxmc_set_property (vo_driver_t *this_gen,
     case VO_PROP_INTERLACED:
       this->props[property].value = value;
       xprintf(this->xine, XINE_VERBOSITY_LOG,
-	      "video_out_xxmc: VO_PROP_INTERLACED(%d)\n", this->props[property].value);
+	      LOG_MODULE ": VO_PROP_INTERLACED(%d)\n", this->props[property].value);
       this->deinterlace_enabled = value;
       break;
 
@@ -1820,7 +1820,7 @@ static int xxmc_set_property (vo_driver_t *this_gen,
 
       this->props[property].value = value;
       xprintf(this->xine, XINE_VERBOSITY_LOG, 
-	      "video_out_xxmc: VO_PROP_ASPECT_RATIO(%d)\n", this->props[property].value);
+	      LOG_MODULE ": VO_PROP_ASPECT_RATIO(%d)\n", this->props[property].value);
       this->sc.user_ratio = value;
 
       xxmc_compute_ideal_size (this);
@@ -1832,7 +1832,7 @@ static int xxmc_set_property (vo_driver_t *this_gen,
       if ((value >= XINE_VO_ZOOM_MIN) && (value <= XINE_VO_ZOOM_MAX)) {
         this->props[property].value = value;
 	xprintf(this->xine, XINE_VERBOSITY_LOG,
-		"video_out_xxmc: VO_PROP_ZOOM_X = %d\n", this->props[property].value);
+		LOG_MODULE ": VO_PROP_ZOOM_X = %d\n", this->props[property].value);
 	
 	this->sc.zoom_factor_x = (double)value / (double)XINE_VO_ZOOM_STEP;
 
@@ -1846,7 +1846,7 @@ static int xxmc_set_property (vo_driver_t *this_gen,
       if ((value >= XINE_VO_ZOOM_MIN) && (value <= XINE_VO_ZOOM_MAX)) {
         this->props[property].value = value;
 	xprintf(this->xine, XINE_VERBOSITY_LOG,
-		"video_out_xxmc: VO_PROP_ZOOM_Y = %d\n", this->props[property].value);
+		LOG_MODULE ": VO_PROP_ZOOM_Y = %d\n", this->props[property].value);
 
 	this->sc.zoom_factor_y = (double)value / (double)XINE_VO_ZOOM_STEP;
 
@@ -1993,7 +1993,7 @@ static void xxmc_dispose (vo_driver_t *this_gen) {
 
   XLockDisplay (this->display);
   if(XvUngrabPort (this->display, this->xv_port, CurrentTime) != Success) {
-    xprintf (this->xine, XINE_VERBOSITY_DEBUG, "video_out_xxmc: xxmc_exit: XvUngrabPort() failed.\n");
+    xprintf (this->xine, XINE_VERBOSITY_DEBUG, LOG_MODULE ": xxmc_exit: XvUngrabPort() failed.\n");
   }
   XFreeGC(this->display, this->gc);
   XUnlockDisplay (this->display);
@@ -2057,7 +2057,7 @@ static void xxmc_check_capability (xxmc_driver_t *this,
 		      this->props[property].atom, &int_default);
 
   xprintf(this->xine, XINE_VERBOSITY_DEBUG,
-	  "video_out_xxmc: port attribute %s (%d) value is %d\n", str_prop, property, int_default);
+	  LOG_MODULE ": port attribute %s (%d) value is %d\n", str_prop, property, int_default);
 
   /*
    * We enable autopaint by default.
@@ -2119,7 +2119,7 @@ static void xxmc_update_XV_FILTER(void *this_gen, xine_cfg_entry_t *entry) {
   XUnlockDisplay(this->display);
 
   xprintf(this->xine, XINE_VERBOSITY_DEBUG,
-	  "video_out_xxmc: bilinear scaling mode (XV_FILTER) = %d\n",xv_filter);
+	  LOG_MODULE ": bilinear scaling mode (XV_FILTER) = %d\n",xv_filter);
 }
 
 static void xxmc_update_XV_DOUBLE_BUFFER(void *this_gen, xine_cfg_entry_t *entry) {
@@ -2135,7 +2135,7 @@ static void xxmc_update_XV_DOUBLE_BUFFER(void *this_gen, xine_cfg_entry_t *entry
   XUnlockDisplay(this->display);
 
   xprintf(this->xine, XINE_VERBOSITY_DEBUG,
-	  "video_out_xxmc: double buffering mode = %d\n", xv_double_buffer);
+	  LOG_MODULE ": double buffering mode = %d\n", xv_double_buffer);
 }
 
 static void xxmc_update_xv_pitch_alignment(void *this_gen, xine_cfg_entry_t *entry) {
@@ -2195,7 +2195,7 @@ static void checkXvMCCap( xxmc_driver_t *this, XvPortID xv_port)
     return;
   }
   xprintf (this->xine, XINE_VERBOSITY_DEBUG, 
-	   "video_out_xxmc: XvMC extension present.\n");
+	   LOG_MODULE ": XvMC extension present.\n");
 
   surfaceInfo = XvMCListSurfaceTypes(this->display, xv_port, &numSurf);
   if (0 == surfaceInfo) {
@@ -2211,7 +2211,7 @@ static void checkXvMCCap( xxmc_driver_t *this, XvPortID xv_port)
   curCap = this->xvmc_cap;
 
   xprintf (this->xine, XINE_VERBOSITY_DEBUG, 
-	   "video_out_xxmc: Found %d XvMC surface types\n",numSurf);
+	   LOG_MODULE ": Found %d XvMC surface types\n", numSurf);
 
   for (i=0; i< numSurf; ++i) {
     curCap->mpeg_flags = 0;
@@ -2235,10 +2235,10 @@ static void checkXvMCCap( xxmc_driver_t *this, XvPortID xv_port)
       curCap->sub_max_height = curInfo->subpicture_max_height;
       curCap->flags = curInfo->flags;
       xprintf (this->xine, XINE_VERBOSITY_DEBUG, 
-	       "video_out_xxmc: Surface type %d: Max size: %d %d.\n",
+	       LOG_MODULE ": Surface type %d: Max size: %d %d.\n",
 	       i,curCap->max_width,curCap->max_height);
       xprintf (this->xine, XINE_VERBOSITY_DEBUG, 
-	       "video_out_xxmc: Surface type %d: Max subpic size: %d %d.\n",
+	       LOG_MODULE ": Surface type %d: Max subpic size: %d %d.\n",
 	       i,curCap->sub_max_width,curCap->sub_max_height);
       
       curCap->type_id = curInfo->surface_type_id;
@@ -2247,21 +2247,18 @@ static void checkXvMCCap( xxmc_driver_t *this, XvPortID xv_port)
       curCap->subPicType.id = 0;
       if (formatValues) {
 	xprintf (this->xine, XINE_VERBOSITY_DEBUG, 
-		 "video_out_xxmc: Surface type %d: Found %d XvMC subpicture "
-		 "types\n",i,numSub);
+		 LOG_MODULE ": Surface type %d: Found %d XvMC subpicture types\n",i,numSub);
 	for (j = 0; j<numSub; ++j) {
 	  if (formatValues[j].id == FOURCC_IA44) {
 	    curCap->subPicType = formatValues[j];
 	    xprintf (this->xine, XINE_VERBOSITY_DEBUG, 
-		     "video_out_xxmc: Surface type %d: Detected and using "
-		     "IA44 subpicture type.\n",i);
+		     LOG_MODULE ": Surface type %d: Detected and using IA44 subpicture type.\n",i);
 	    /* Prefer IA44 */
 	    break;
 	  } else if (formatValues[j].id == FOURCC_AI44) {
 	    curCap->subPicType = formatValues[j];
 	    xprintf (this->xine, XINE_VERBOSITY_DEBUG, 
-		     "video_out_xxmc: Surface type %d: Detected AI44 "
-		     "subpicture type.\n",i);
+		     LOG_MODULE ": Surface type %d: Detected AI44 subpicture type.\n",i);
 	  }
 	}
       }
@@ -2292,9 +2289,8 @@ static void checkXvMCCap( xxmc_driver_t *this, XvPortID xv_port)
     free(this->xvmc_cap);
     this->xvmc_cap = 0;
     xprintf (this->xine, XINE_VERBOSITY_DEBUG, 
-	     "video_out_xxmc: Apparent attempt to use a direct XvMC "
-	     "context\nvideo_out_xxmc:   on a remote display. "
-	     "Falling back to XV.\n");
+	     LOG_MODULE ": Apparent attempt to use a direct XvMC context on a remote display.\n"
+	     LOG_MODULE ": Falling back to Xv.\n");
     XVMCUNLOCKDISPLAY( this->display );
     xvmc_context_writer_unlock( &this->xvmc_lock );
     return;
@@ -2350,7 +2346,7 @@ static vo_driver_t *open_plugin (video_driver_class_t *class_gen, const void *vi
 
   XLockDisplay(this->display);
   if (Success != XvQueryExtension(this->display, &ver,&rel, &req, &ev,&err)) {
-    xprintf (class->xine, XINE_VERBOSITY_LOG, _("video_out_xxmc: Xv extension not present.\n"));
+    xprintf (class->xine, XINE_VERBOSITY_LOG, _("%s: Xv extension not present.\n"), LOG_MODULE);
     XUnlockDisplay(this->display);
     return NULL;
   }
@@ -2360,7 +2356,7 @@ static vo_driver_t *open_plugin (video_driver_class_t *class_gen, const void *vi
    */
 
   if (Success != XvQueryAdaptors(this->display,DefaultRootWindow(this->display), &adaptors, &adaptor_info))  {
-    xprintf(class->xine, XINE_VERBOSITY_DEBUG, "video_out_xxmc: XvQueryAdaptors failed.\n");
+    xprintf(class->xine, XINE_VERBOSITY_DEBUG, LOG_MODULE ": XvQueryAdaptors failed.\n");
     XUnlockDisplay(this->display);
     return NULL;
   }
@@ -2387,8 +2383,9 @@ static vo_driver_t *open_plugin (video_driver_class_t *class_gen, const void *vi
 
   if (!xv_port) {
     xprintf(class->xine, XINE_VERBOSITY_LOG,
-	    _("video_out_xxmc: Xv extension is present but I couldn't find a usable yuv12 port.\n"
-	      "              Looks like your graphics hardware driver doesn't support Xv?!\n"));
+	    _("%s: Xv extension is present but I couldn't find a usable yuv12 port.\n"
+	      "\tLooks like your graphics hardware driver doesn't support Xv?!\n"),
+	    LOG_MODULE);
     
     /* XvFreeAdaptorInfo (adaptor_info); this crashed on me (gb)*/
     XUnlockDisplay(this->display);
@@ -2396,8 +2393,8 @@ static vo_driver_t *open_plugin (video_driver_class_t *class_gen, const void *vi
   } 
   else
     xprintf(class->xine, XINE_VERBOSITY_LOG,
-	    _("video_out_xxmc: using Xv port %ld from adaptor %s for hardware "
-	      "colorspace conversion and scaling.\n"), xv_port,
+	    _("%s: using Xv port %ld from adaptor %s for hardware "
+	      "colorspace conversion and scaling.\n"), LOG_MODULE, xv_port,
             adaptor_info[adaptor_num].name);
   
   XUnlockDisplay(this->display);
@@ -2473,7 +2470,7 @@ static vo_driver_t *open_plugin (video_driver_class_t *class_gen, const void *vi
       if((attr[k].flags & XvSettable) && (attr[k].flags & XvGettable)) {
 	if(!strcmp(attr[k].name, "XV_HUE")) {
 	  if (!strncmp(adaptor_info[adaptor_num].name, "NV", 2)) {
-            xprintf (this->xine, XINE_VERBOSITY_NONE, "video_out_xxmc: ignoring broken XV_HUE settings on NVidia cards\n");
+            xprintf (this->xine, XINE_VERBOSITY_NONE, LOG_MODULE ": ignoring broken XV_HUE settings on NVidia cards\n");
 	  } else {
 	    xxmc_check_capability (this, VO_PROP_HUE, attr[k],
 				   adaptor_info[adaptor_num].base_id, "XV_HUE",
@@ -2543,7 +2540,7 @@ static vo_driver_t *open_plugin (video_driver_class_t *class_gen, const void *vi
     XFree(attr);
   }
   else
-    xprintf(this->xine, XINE_VERBOSITY_DEBUG, "video_out_xxmc: no port attributes defined.\n");
+    xprintf(this->xine, XINE_VERBOSITY_DEBUG, LOG_MODULE ": no port attributes defined.\n");
   XvFreeAdaptorInfo(adaptor_info);
 
   /*
@@ -2572,12 +2569,12 @@ static vo_driver_t *open_plugin (video_driver_class_t *class_gen, const void *vi
       this->xv_format_yv12 = fo[i].id;
       this->capabilities |= VO_CAP_YV12;
       xprintf(this->xine, XINE_VERBOSITY_LOG,
-	      _("video_out_xxmc: this adaptor supports the yv12 format.\n"));
+	      _("%s: this adaptor supports the yv12 format.\n"), LOG_MODULE);
     } else if (fo[i].id == XINE_IMGFMT_YUY2) {
       this->xv_format_yuy2 = fo[i].id;
       this->capabilities |= VO_CAP_YUY2;
       xprintf(this->xine, XINE_VERBOSITY_LOG, 
-	      _("video_out_xxmc: this adaptor supports the yuy2 format.\n"));
+	      _("%s: this adaptor supports the yuy2 format.\n"), LOG_MODULE);
     }
   }
 
@@ -2635,10 +2632,10 @@ static vo_driver_t *open_plugin (video_driver_class_t *class_gen, const void *vi
   this->cur_field = XVMC_FRAME_PICTURE;
 
 #ifdef HAVE_VLDXVMC
-  printf("video_out_xxmc: Unichrome CPU saving is %s.\n",
+  printf("%s: Unichrome CPU saving is %s.\n", LOG_MODULE,
 	 (this->cpu_save_enabled) ? "on":"off"); 
 #else
-  printf("video_out_xxmc: warning - compiled with no vld extensions.\n");
+  printf("%s: warning - compiled with no vld extensions.\n", LOG_MODULE);
 #endif
   this->props[VO_PROP_MAX_NUM_FRAMES].value  = (use_more_frames) ? 15:8;
   this->cpu_saver = 0.;
