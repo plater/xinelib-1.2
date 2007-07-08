@@ -1,24 +1,25 @@
 include $(top_srcdir)/misc/Makefile.common
 
-SUBDIRS = libcdio libvcd
+$(top_builddir)/contrib/libcdio/libcdio.la:
+	$(MAKE) -C $(top_builddir)/contrib/libcdio
 
-vcd_SRCS = xineplug_inp_vcd.c vcdplayer.c vcdio.c xine-extra.c
+$(top_builddir)/contrib/libcdio/libiso9660.la:
+	$(MAKE) -C $(top_builddir)/contrib/libcdio
 
-EXTRA_DIST = $(vcd_SRCS)
+$(top_builddir)/contrib/libvcd/libvcd.la:
+	$(MAKE) -C $(top_builddir)/contrib/libvcd
 
-if ENABLE_VCD
-xineplug_LTLIBRARIES = xineplug_inp_vcd.la
+$(top_builddir)/contrib/libvcd/libvcdinfo.la:
+	$(MAKE) -C $(top_builddir)/contrib/libvcd
 
-AM_CFLAGS = $(LIBCDIO_CFLAGS) $(LIBVCD_CFLAGS)
-
-xineplug_inp_vcd_la_SOURCES = $(vcd_SRCS)
-xineplug_inp_vcd_la_LDFLAGS = -avoid-version -module
-if HAVE_VCDNAV
-xineplug_inp_vcd_la_LIBADD = $(XINE_LIB) $(LTLIBINTL) $(LIBVCDINFO_LIBS)
-else
-xineplug_inp_vcd_la_LIBADD = $(XINE_LIB) $(LTLIBINTL) $(LIBVCD_LIBS) $(LIBVCDINFO_LIBS) -lm
-endif
-
-endif
+AM_CFLAGS  = $(DEFAULT_OCFLAGS) $(VISIBILITY_FLAG)
+AM_LDFLAGS = $(xineplug_ldflags)
 
 noinst_HEADERS = vcdio.h vcdplayer.h xine-extra.h
+
+xineplug_LTLIBRARIES = xineplug_inp_vcd.la
+
+xineplug_inp_vcd_la_SOURCES = xineplug_inp_vcd.c vcdplayer.c vcdio.c xine-extra.c
+xineplug_inp_vcd_la_LIBADD = $(XINE_LIB) $(LTLIBINTL) $(LIBCDIO_LIBS) $(LIBVCD_LIBS) $(LIBVCDINFO_LIBS) $(LIBISO9660_LIBS) -lm
+xineplug_inp_vcd_la_DEPENDENCIES = $(LIBCDIO_DEPS) $(LIBVCD_DEPS) $(LIBVCDINFO_DEPS) $(LIBISO9660_DEPS)
+xineplug_inp_vcd_la_CFLAGS  = $(AM_CFLAGS) $(LIBCDIO_CFLAGS) $(LIBVCD_CFLAGS)
