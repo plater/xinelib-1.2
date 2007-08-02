@@ -999,7 +999,7 @@ vcd_plugin_get_mrl (input_plugin_t *this_gen)
   
   return human readable (verbose = 1 line) description for this plugin
 */
-static char *
+static const char *
 vcd_class_get_description (input_class_t *this_gen) 
 {
   dbg_print((INPUT_DBG_CALL|INPUT_DBG_EXT), "called\n");
@@ -1813,13 +1813,13 @@ vcd_init (xine_t *xine, void *data)
     /*Note: these labels have to be listed in the same order as the
       enumeration vcdplayer_autoplay_t in vcdplayer.h. 
     */
-    static const char *autoplay_modes[] = 
+    static const char *const autoplay_modes[] = 
       { "MPEG track", "entry", "segment",  "playback-control item", NULL };
     
     /*Note: these labels have to be listed in the same order as the
       enumeration vcdplayer_slider_length_t in vcdplayer.h. 
     */
-    static const char *length_reporting_modes[] = 
+    static const char *const length_reporting_modes[] = 
       { "auto", "track", "entry", NULL };
     
     my_vcd.player.default_autoplay = 
