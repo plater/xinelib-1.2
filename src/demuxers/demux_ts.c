@@ -1333,7 +1333,6 @@ printf("Program Number is %i, looking for %i\n",program_number,this->program_num
     case ISO_13818_PES_PRIVATE:
       for (i = 5; i < coded_length; i += stream[i+1] + 2) {
           if ((stream[i] == 0x6a) && (this->audio_tracks_count < MAX_AUDIO_TRACKS)) {
-          uint32_t format_identifier=0;
           int i, found = 0;
           for(i = 0; i < this->audio_tracks_count; i++) {
             if(this->audio_tracks[i].pid == pid) {
@@ -2273,9 +2272,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen,
   this->status = DEMUX_FINISHED;
 
 #ifdef TS_READ_STATS
-  for (i=0; i<=NPKT_PER_READ; i++) {
-    this->rstat[i] = 0;
-  }
+  memset(this-rstat, 0, sizeof(*this->rstat)*NPKT_PER_READ);
 #endif
 
   /* DVBSUB */
