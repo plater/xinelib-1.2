@@ -413,7 +413,7 @@ static vbri_header_t* parse_vbri_header(mpg_audio_frame_t *frame,
     lprintf("entry_frames: %d\n", vbri->entry_frames);
 
     if ((ptr + (vbri->toc_entries + 1) * vbri->entry_size) >= (buf + bufsize)) return 0;
-    vbri->toc = xine_xmalloc (sizeof(int) * (vbri->toc_entries + 1));
+    vbri->toc = xine_xcalloc ((vbri->toc_entries + 1), sizeof(int));
     if (!vbri->toc) {
       free (vbri);
       return NULL;
@@ -697,7 +697,7 @@ static int detect_mpgaudio_file(input_plugin_t *input) {
      * id3v2 are not specific to mp3 files,
      * flac files can contain id3v2 tags
      */
-    uint32_t tag_size = _X_BE_32_synchsafe(&buf[6]);
+    int tag_size = _X_BE_32_synchsafe(&buf[6]);
     lprintf("try to skip id3v2 tag (%d bytes)\n", tag_size);
     if ((10 + tag_size) >= preview_len) {
       lprintf("cannot skip id3v2 tag\n");

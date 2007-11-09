@@ -43,6 +43,8 @@
 #include <ctype.h>
 #include <signal.h>
 
+#include <basedir.h>
+
 #define LOG_MODULE "load_plugins"
 #define LOG_VERBOSE
 
@@ -95,6 +97,7 @@ static void remove_segv_handler(void){
 #endif
 #endif /* 0 */
 
+#define CACHE_CATALOG_VERSION 2
 
 static const int plugin_iface_versions[] = {
   INPUT_PLUGIN_IFACE_VERSION,
@@ -317,7 +320,6 @@ static void _insert_node (xine_t *this,
   const input_info_t   *input_old;
   uint32_t             *types;
   char                  key[80];
-  char                  desc[100];
   int                   i;
 
   _x_assert(list);
@@ -381,13 +383,8 @@ static void _insert_node (xine_t *this,
     entry->priority = decoder_new->priority = decoder_old->priority;
     
     snprintf(key, sizeof(key), "engine.decoder_priorities.%s", info->id);
-    snprintf(desc, sizeof(desc), _("priority for %s decoder"), info->id);
-    /* write the description on the heap because the config system
-     * does not strdup() it, so we have to provide a different pointer
-     * for each decoder */
     for (i = 0; catalog->prio_desc[i]; i++);
-    catalog->prio_desc[i] = malloc(strlen(desc) + 1);
-    strcpy(catalog->prio_desc[i], desc);
+    asprintf(&catalog->prio_desc[i], _("priority for %s decoder"), info->id);
     this->config->register_num (this->config,
 				key,
 				0,
@@ -949,7 +946,7 @@ static void load_plugin_list(FILE *fp, xine_sarray_t *plugins) {
       file                = xine_xmalloc(sizeof(plugin_file_t));
       node->file          = file;
       file->filename      = strdup(line+1);
-      node->info          = xine_xmalloc(2*sizeof(plugin_info_t));
+      node->info          = xine_xcalloc(2, sizeof(plugin_info_t));
       node->info[1].type  = PLUGIN_NONE;
       decoder_info        = NULL;
       vo_info             = NULL;
@@ -1033,7 +1030,7 @@ static void load_plugin_list(FILE *fp, xine_sarray_t *plugins) {
           for( s = value, i = 0; s && sscanf(s," %lu",&lu) > 0; i++ ) {
             s = strchr(s+1, ' ');
           }
-          decoder_info->supported_types = xine_xmalloc((i+1)*sizeof(uint32_t));
+          decoder_info->supported_types = xine_xcalloc((i+1), sizeof(uint32_t));
           for( s = value, i = 0; s && sscanf(s," %lu",&lu) > 0; i++ ) {
             decoder_info->supported_types[i] = lu;
             s = strchr(s+1, ' ');
@@ -1066,27 +1063,68 @@ static void load_plugin_list(FILE *fp, xine_sarray_t *plugins) {
   }
 }
 
+/**
+ * @brief Returns the complete filename for the plugins' cache file
+ * @param this Instance pointer, used for logging and libxdg-basedir.
+ * @param createdir If not zero, create the directory structure in which
+ *        the file has to reside.
+ * @return If createdir was not zero, returns NULL if the directory hasn't
+ *         been created; otherwise always returns a new string with the
+ *         name of the cachefile.
+ * @internal
+ *
+ * @see XDG Base Directory specification:
+ *      http://standards.freedesktop.org/basedir-spec/latest/index.html
+ */
+static char *catalog_filename(xine_t *this, int createdir) {
+  const char *const xdg_cache_home = xdgCacheHome(this->basedir_handle);
+  char *cachefile = NULL;
+
+  cachefile = xine_xmalloc( strlen(xdg_cache_home) + sizeof("/"PACKAGE"/plugins.cache") );
+  strcpy(cachefile, xdg_cache_home);
+
+  /* If we're going to create the directory structure, we concatenate
+   * piece by piece the path, so that we can try to create all the
+   * directories.
+   * If we don't need to create anything, we just concatenate the
+   * whole path at once.
+   */
+  if ( createdir ) {
+    int result = 0;
+
+    result = mkdir( cachefile, 0700 );
+    if ( result != 0 && errno != EEXIST ) {
+      /** @todo Convert this to use xine's log facility */
+      fprintf(stderr, _("Unable to create %s directory: %s\n"), cachefile, strerror(errno));
+      free(cachefile);
+      return NULL;
+    }
+
+    strcat(cachefile, "/"PACKAGE);
+    result = mkdir( cachefile, 0700 );
+    if ( result != 0 && errno != EEXIST ) {
+      /** @todo Convert this to use xine's log facility */
+      fprintf(stderr, _("Unable to create %s directory: %s\n"), cachefile, strerror(errno));
+      free(cachefile);
+      return NULL;
+    }
+
+    strcat(cachefile, "/plugins.cache");
+
+  } else
+    strcat(cachefile, "/"PACKAGE"/plugins.cache");
+
+  return cachefile;
+}
 
 /*
  * save catalog to cache file
  */
 static void save_catalog (xine_t *this) {
-
   FILE       *fp;
-  char       *cachefile, *dirfile; 
-  const char *relname = CACHE_CATALOG_FILE;
-  const char *dirname = CACHE_CATALOG_DIR;
-    
-  cachefile = (char *) xine_xmalloc(strlen(xine_get_homedir()) + 
-                                    strlen(relname) + 2);
-  sprintf(cachefile, "%s/%s", xine_get_homedir(), relname);
-  
-  /* make sure homedir (~/.xine) exists */
-  dirfile = (char *) xine_xmalloc(strlen(xine_get_homedir()) + 
-				  strlen(dirname) + 2);
-  sprintf(dirfile, "%s/%s", xine_get_homedir(), dirname);
-  mkdir (dirfile, 0755);
-  free (dirfile);
+  char *const cachefile = catalog_filename(this, 1);
+
+  if ( ! cachefile ) return;
 
   if( (fp = fopen(cachefile,"w")) != NULL ) {
     int i;
@@ -1108,13 +1146,9 @@ static void save_catalog (xine_t *this) {
 static void load_cached_catalog (xine_t *this) {
 
   FILE *fp;
-  char *cachefile;                                               
-  const char *relname = CACHE_CATALOG_FILE;
-    
-  cachefile = (char *) xine_xmalloc(strlen(xine_get_homedir()) + 
-                                    strlen(relname) + 2);
-  sprintf(cachefile, "%s/%s", xine_get_homedir(), relname);
-  
+  char *const cachefile = catalog_filename(this, 0);
+  /* It can't return NULL without creating directories */
+
   if( (fp = fopen(cachefile,"r")) != NULL ) {
     load_plugin_list (fp, this->plugin_catalog->cache_list);
     fclose(fp);
@@ -2231,7 +2265,7 @@ const char *const *xine_list_post_plugins(xine_t *xine) {
   return catalog->ids;
 }
 
-const char *const *xine_list_post_plugins_typed(xine_t *xine, int type) {
+const char *const *xine_list_post_plugins_typed(xine_t *xine, uint32_t type) {
   plugin_catalog_t *catalog = xine->plugin_catalog;
   plugin_node_t    *node;
   int               i;

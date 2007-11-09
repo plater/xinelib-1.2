@@ -71,7 +71,6 @@ typedef struct {
 
   xine_stream_t   *stream;
   
-  int              fh;
   char            *mrl;
 
   nbc_t           *nbc; 
@@ -85,27 +84,29 @@ typedef struct {
   char             auth[BUFSIZE];
   char             proxyauth[BUFSIZE];
   
+  char             preview[MAX_PREVIEW_SIZE];
+  off_t            preview_size;
+
   char            *proto;
   char            *user;
   char            *password;
   char            *host;
-  int              port;
   char            *uri;
-  
-  char             preview[MAX_PREVIEW_SIZE];
-  off_t            preview_size;
-  
-  /* Last.FM streaming server */
-  unsigned char    is_lastfm;
+  int              port;
+
+  int              fh;
+
+  /** Set to 1 if the stream is a NSV stream. */
+  int              is_nsv:1;
+  /** Set to 1 if the stream comes from last.fm. */
+  int              is_lastfm:1;
+  /** Set to 1 if the stream is ShoutCast. */
+  int              shoutcast_mode:1;
 
   /* ShoutCast */
-  int              shoutcast_mode;
   int              shoutcast_metaint;
   off_t            shoutcast_pos;
   char            *shoutcast_songtitle;
-
-  /* NSV */
-  int              is_nsv;
 
   /* scratch buffer for forward seeking */
 
@@ -121,13 +122,13 @@ typedef struct {
   config_values_t  *config;
 
   char             *proxyhost;
+  char             *proxyhost_env;
   int               proxyport;
+  int               proxyport_env;
+
   char             *proxyuser;
   char             *proxypassword;
   char             *noproxylist;
-
-  char             *proxyhost_env;
-  int               proxyport_env;
 } http_input_class_t;
 
 static void proxy_host_change_cb (void *this_gen, xine_cfg_entry_t *cfg) {
@@ -425,8 +426,9 @@ error:
 }
 
 static off_t http_plugin_read (input_plugin_t *this_gen,
-                               char *buf, off_t nlen) {
+                               void *buf_gen, off_t nlen) {
   http_input_plugin_t *this = (http_input_plugin_t *) this_gen;
+  char *buf = (char *)buf_gen;
   off_t n, num_bytes;
 
   num_bytes = 0;
@@ -853,7 +855,12 @@ static int http_plugin_open (input_plugin_t *this_gen ) {
 		    _("input_http: http status not 2xx: >%d %s<\n"),
 		                        httpcode, httpstatus);
 	  return -7;
-	} else if (httpcode == 403 || httpcode == 401) {
+	} else if (httpcode == 401) {
+	  xine_log (this->stream->xine, XINE_LOG_MSG,
+		    _("input_http: http status not 2xx: >%d %s<\n"),
+		    httpcode, httpstatus);
+          /* don't return - there may be a WWW-Authenticate header... */
+	} else if (httpcode == 403) {
           _x_message(this->stream, XINE_MSG_PERMISSION_ERROR, this->mrl, NULL);
 	  xine_log (this->stream->xine, XINE_LOG_MSG,
 		    _("input_http: http status not 2xx: >%d %s<\n"),
@@ -889,6 +896,9 @@ static int http_plugin_open (input_plugin_t *this_gen ) {
           this->mrl = href;
           return http_plugin_open(this_gen);
         }
+
+        if (!strncasecmp (this->buf, "WWW-Authenticate: ", 18))
+          strcpy (this->preview, this->buf + 18);
 
 	{
 	  static const char mpegurl_ct_str[] = "Content-Type: audio/x-mpegurl";
@@ -962,6 +972,10 @@ static int http_plugin_open (input_plugin_t *this_gen ) {
   }
 
   lprintf ("end of headers\n");
+
+  if (httpcode == 401)
+    _x_message(this->stream, XINE_MSG_AUTHENTICATION_NEEDED,
+               this->mrl, *this->preview ? this->preview : NULL, NULL);
 
   if ( mpegurl_redirect ) {
     char buf[4096] = { 0, };

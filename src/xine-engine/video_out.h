@@ -130,6 +130,9 @@ struct vo_frame_s {
   /* cropping to be done */
   int                        crop_left, crop_right, crop_top, crop_bottom;
 
+  int                        lock_counter;
+  pthread_mutex_t            mutex; /* protect access to lock_count */
+
   /* extra info coming from input or demuxers */
   extra_info_t              *extra_info;    
  
@@ -158,8 +161,6 @@ struct vo_frame_s {
    * obs: changing anything here will require recompiling vo drivers
    */
   struct vo_frame_s         *next;
-  int                        lock_counter;
-  pthread_mutex_t            mutex; /* protect access to lock_count */
   
   int                        id; /* debugging - track this frame */
   int                        is_first;
@@ -204,6 +205,9 @@ struct xine_video_port_s {
 
   /* flush video_out fifo */
   void (*flush) (xine_video_port_t *self);
+
+  /* trigger immediate drawing */
+  void (*trigger_drawing) (xine_video_port_t *self);
 
   /* Get/Set video property
    *
@@ -443,11 +447,12 @@ struct video_overlay_manager_s {
                                   vo_driver_t *output, vo_frame_t *vo_img, int enabled);
 };
 
-/*
- * build a video_out_port from
- * a given video driver
+/**
+ * @brief Build a video output port from a given video driver.
+ *
+ * @internal
  */
-xine_video_port_t *_x_vo_new_port (xine_t *xine, vo_driver_t *driver, int grabonly) XINE_PROTECTED;
+xine_video_port_t *_x_vo_new_port (xine_t *xine, vo_driver_t *driver, int grabonly);
 
 #ifdef __cplusplus
 }
