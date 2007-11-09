@@ -256,6 +256,27 @@ void *xine_xmalloc(size_t size) {
   return ptr;
 }
 
+/**
+ * @brief Wrapper around calloc() function.
+ * @param nmemb Number of elements to allocate
+ * @param size Size of each element to allocate
+ *
+ * This is a simple wrapper around calloc(), the only thing
+ * it does more than calloc() is outputting an error if
+ * the calloc fails (returning NULL).
+ */
+void *xine_xcalloc(size_t nmemb, size_t size) {
+  void *ptr;
+
+  if((ptr = calloc(nmemb, size)) == NULL) {
+    fprintf(stderr, "%s: calloc() failed: %s.\n",
+	    __XINE_FUNCTION__, strerror(errno));
+    return NULL;
+  }
+
+  return ptr;
+}
+
 void *xine_xmalloc_aligned(size_t alignment, size_t size, void **base) {
 
   char *ptr;
@@ -453,38 +474,40 @@ void xine_usec_sleep(unsigned usec) {
 
 
 /* print a hexdump of length bytes from the data given in buf */
-void xine_hexdump (const char *buf, int length) {
-  int i,j;
-  unsigned char c;
+void xine_hexdump (const void *buf_gen, int length) {
+  static const char separator[70] = "---------------------------------------------------------------------";
+
+  const uint8_t *const buf = (const uint8_t*)buf;
+  int j = 0;
 
   /* printf ("Hexdump: %i Bytes\n", length);*/
-  for(j=0; j<69; j++)
-    printf ("-");
-  printf ("\n");
+  puts(separator);
 
-  j=0;
   while(j<length) {
+    int i;
+    const int imax = (j+16 < length) ? (j+16) : length;
+
     printf ("%04X ",j);
     for (i=j; i<j+16; i++) {
       if( i<length )
-        printf ("%02X ", (unsigned char) buf[i]);
+        printf ("%02X ", buf[i]);
       else
         printf("   ");
     }
-    for (i=j;i<(j+16<length?j+16:length);i++) {
-      c=buf[i];
+
+    for (i=j; i < imax; i++) {
+      uint8_t c = buf[i];
       if ((c>=32) && (c<127))
-        printf ("%c", c);
-      else
-        printf (".");
+	c = '.';
+
+      fputc(c, stdout);
     }
     j=i;
-    printf("\n");
+
+    fputc('\n', stdout);
   }
 
-  for(j=0; j<69; j++)
-    printf("-");
-  printf("\n");
+  puts(separator);
 }
 
 

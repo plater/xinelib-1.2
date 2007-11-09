@@ -34,7 +34,6 @@ void *demux_dts_init_plugin (xine_t *xine, void *data);
 void *demux_flac_init_plugin (xine_t *xine, void *data);
 void *demux_mpgaudio_init_class (xine_t *xine, void *data);
 void *demux_mpc_init_plugin (xine_t *xine, void *data);
-void *demux_nsf_init_plugin (xine_t *xine, void *data);
 void *demux_realaudio_init_plugin (xine_t *xine, void *data);
 void *demux_shn_init_plugin (xine_t *xine, void *data);
 void *demux_snd_init_plugin (xine_t *xine, void *data);
@@ -42,9 +41,5 @@ void *demux_tta_init_plugin (xine_t *xine, void *data);
 void *demux_voc_init_plugin (xine_t *xine, void *data);
 void *demux_vox_init_plugin (xine_t *xine, void *data);
 void *demux_wav_init_plugin (xine_t *xine, void *data);
-
-#ifdef HAVE_MODPLUG
-void *demux_mod_init_plugin (xine_t *xine, void *data);
-#endif
 
 #endif
