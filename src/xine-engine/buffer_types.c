@@ -1143,7 +1143,7 @@ static uint32_t cached_buf_type=0;
   return 0;
 }
 
-char * _x_buf_video_name( uint32_t buf_type ) {
+const char *_x_buf_video_name( uint32_t buf_type ) {
 int i;
   
   buf_type &= 0xffff0000;
@@ -1177,7 +1177,7 @@ static uint32_t cached_buf_type=0;
   return 0;
 }
 
-char * _x_buf_audio_name( uint32_t buf_type ) {
+const char *_x_buf_audio_name( uint32_t buf_type ) {
 int i;
   
   buf_type &= 0xffff0000;
