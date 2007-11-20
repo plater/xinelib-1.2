@@ -311,8 +311,6 @@ static int demux_ra_get_status (demux_plugin_t *this_gen) {
 
 /* return the approximate length in miliseconds */
 static int demux_ra_get_stream_length (demux_plugin_t *this_gen) {
-  demux_ra_t *this = (demux_ra_t *) this_gen;
-
   return 0;
 }
 
