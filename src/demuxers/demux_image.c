@@ -143,13 +143,6 @@ static int demux_image_get_optional_data(demux_plugin_t *this_gen,
   return DEMUX_OPTIONAL_UNSUPPORTED;
 }
 
-static void demux_image_dispose (demux_plugin_t *this_gen) {
-  demux_image_t *this = (demux_image_t *) this_gen;
-
-  lprintf("closed\n");
-  free (this);
-}
-
 static demux_plugin_t *open_plugin (demux_class_t *class_gen,
 				    xine_stream_t *stream,
 				    input_plugin_t *input) {
@@ -205,7 +198,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen,
   this->demux_plugin.send_headers      = demux_image_send_headers;
   this->demux_plugin.send_chunk        = demux_image_send_chunk;
   this->demux_plugin.seek              = demux_image_seek;
-  this->demux_plugin.dispose           = demux_image_dispose;
+  this->demux_plugin.dispose           = default_demux_plugin_dispose;
   this->demux_plugin.get_status        = demux_image_get_status;
   this->demux_plugin.get_stream_length = demux_image_get_stream_length;
   this->demux_plugin.get_capabilities  = demux_image_get_capabilities;
@@ -223,14 +216,6 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen,
  * image demuxer class
  */
 
-static const char *get_description (demux_class_t *this_gen) {
-  return "image demux plugin";
-}
- 
-static const char *get_identifier (demux_class_t *this_gen) {
-  return "imagedmx";
-}
-
 static const char *get_extensions (demux_class_t *this_gen) {
   return "png gif jpg jpeg";
 }
@@ -239,24 +224,17 @@ static const char *get_mimetypes (demux_class_t *this_gen) {
   return NULL;
 }
 
-static void class_dispose (demux_class_t *this_gen) {
-  demux_image_class_t *this = (demux_image_class_t *) this_gen;
-
-  lprintf("class closed\n");
-  free (this);
-}
-
 static void *init_class (xine_t *xine, void *data) {
   demux_image_class_t     *this;
 
   this  = xine_xmalloc (sizeof (demux_image_class_t));
 
   this->demux_class.open_plugin     = open_plugin;
-  this->demux_class.get_description = get_description;
-  this->demux_class.get_identifier  = get_identifier;
+  this->demux_class.description     = N_("image demux plugin");
+  this->demux_class.identifier      = "imagedmx";
   this->demux_class.get_mimetypes   = get_mimetypes;
   this->demux_class.get_extensions  = get_extensions;
-  this->demux_class.dispose         = class_dispose;
+  this->demux_class.dispose         = default_demux_class_dispose;
 
   lprintf("class opened\n");
   return this;

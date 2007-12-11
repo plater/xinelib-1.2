@@ -2263,27 +2263,12 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen,
  * ts demuxer class
  */
 
-static const char *get_description (demux_class_t *this_gen) {
-  return "MPEG Transport Stream demuxer";
-}
- 
-static const char *get_identifier (demux_class_t *this_gen) {
-  return "MPEG_TS";
-}
-
 static const char *get_extensions (demux_class_t *this_gen) {
   return "ts m2t trp";
 }
 
 static const char *get_mimetypes (demux_class_t *this_gen) {
   return NULL;
-}
-
-static void class_dispose (demux_class_t *this_gen) {
-
-  demux_ts_class_t *this = (demux_ts_class_t *) this_gen;
-
-  free (this);
 }
 
 static void *init_class (xine_t *xine, void *data) {
@@ -2295,11 +2280,11 @@ static void *init_class (xine_t *xine, void *data) {
   this->xine   = xine;
 
   this->demux_class.open_plugin     = open_plugin;
-  this->demux_class.get_description = get_description;
-  this->demux_class.get_identifier  = get_identifier;
+  this->demux_class.description     = N_("MPEG Transport Stream demuxer");
+  this->demux_class.identifier      = "MPEG_TS";
   this->demux_class.get_mimetypes   = get_mimetypes;
   this->demux_class.get_extensions  = get_extensions;
-  this->demux_class.dispose         = class_dispose;
+  this->demux_class.dispose         = default_demux_class_dispose;
 
   return this;
 }

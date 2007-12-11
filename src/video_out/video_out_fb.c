@@ -1046,30 +1046,14 @@ error:
   return 0;
 }
 
-static char* fb_get_identifier(video_driver_class_t *this_gen)
-{
-  return "fb";
-}
-
-static char* fb_get_description(video_driver_class_t *this_gen)
-{
-  return _("Xine video output plugin using the Linux frame buffer device");
-}
-
-static void fb_dispose_class(video_driver_class_t *this_gen)
-{
-  fb_class_t *this = (fb_class_t *)this_gen;
-  free(this);
-}
-
 static void *fb_init_class(xine_t *xine, void *visual_gen)
 {
   fb_class_t *this = (fb_class_t *)xine_xmalloc(sizeof(fb_class_t));
 
   this->driver_class.open_plugin     = fb_open_plugin;
-  this->driver_class.get_identifier  = fb_get_identifier;
-  this->driver_class.get_description = fb_get_description;
-  this->driver_class.dispose         = fb_dispose_class;
+  this->driver_class.identifier      = "fb";
+  this->driver_class.description     = N_("Xine video output plugin using the Linux frame buffer device");
+  this->driver_class.dispose         = default_video_driver_class_dispose;
 
   this->config          = xine->config;
   this->xine            = xine;

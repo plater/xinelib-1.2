@@ -53,16 +53,22 @@ struct demux_class_s {
    */
   demux_plugin_t* (*open_plugin) (demux_class_t *this, xine_stream_t *stream, input_plugin_t *input);
 
-  /*
-   * return human readable (verbose = 1 line) description for this plugin
+  /**
+   * @brief short human readable identifier for this plugin class
    */
-  const char* (*get_description) (demux_class_t *this);
+  const char *identifier;
 
-  /*
-   * return human readable identifier for this plugin
+  /**
+   * @brief human readable (verbose = 1 line) description for this plugin class
+   *
+   * The description is passed to gettext() to internationalise.
    */
-
-  const char* (*get_identifier) (demux_class_t *this);
+  const char *description;
+  
+  /**
+   * @brief Optional non-standard catalog to use with dgettext() for description.
+   */
+  const char *textdomain;
   
   /*
    * return MIME types supported for this plugin
@@ -85,6 +91,7 @@ struct demux_class_s {
   void (*dispose) (demux_class_t *this);
 };
 
+#define default_demux_class_dispose (void (*) (demux_class_t *this))free
 
 /*
  * any demux plugin must implement these functions
@@ -172,6 +179,8 @@ struct demux_plugin_s {
   void *node; /* used by plugin loader */
 
 } ;
+
+#define default_demux_plugin_dispose (void (*) (demux_plugin_t *this))free
 
 /*
  * possible capabilites a demux plugin can have:

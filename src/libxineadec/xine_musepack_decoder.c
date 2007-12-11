@@ -430,21 +430,6 @@ static audio_decoder_t *open_plugin (audio_decoder_class_t *class_gen, xine_stre
   return &this->audio_decoder;
 }
 
-static char *get_identifier (audio_decoder_class_t *this) {
-  return "mpc";
-}
-
-static char *get_description (audio_decoder_class_t *this) {
-  return "mpc: musepack audio decoder plugin";
-}
-
-static void dispose_class (audio_decoder_class_t *this_gen) {
-
-  mpc_class_t *this = (mpc_class_t *)this_gen;
-
-  free (this);
-}
-
 static void *init_plugin (xine_t *xine, void *data) {
 
   mpc_class_t *this ;
@@ -452,9 +437,9 @@ static void *init_plugin (xine_t *xine, void *data) {
   this = (mpc_class_t *) xine_xmalloc (sizeof (mpc_class_t));
 
   this->decoder_class.open_plugin     = open_plugin;
-  this->decoder_class.get_identifier  = get_identifier;
-  this->decoder_class.get_description = get_description;
-  this->decoder_class.dispose         = dispose_class;
+  this->decoder_class.identifier      = "mpc";
+  this->decoder_class.description     = N_("mpc: musepack audio decoder plugin");
+  this->decoder_class.dispose         = default_audio_decoder_class_dispose;
 
   return this;
 }

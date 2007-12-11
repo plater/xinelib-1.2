@@ -490,18 +490,6 @@ static spu_decoder_t *spucmml_class_open_plugin (spu_decoder_class_t *class_gen,
   return (spu_decoder_t *) this;
 }
 
-static void spucmml_class_dispose (spu_decoder_class_t *this) {
-  free (this);
-}
-
-static char *spucmml_class_get_identifier (spu_decoder_class_t *this) {
-  return "spucmml";
-}
-
-static char *spucmml_class_get_description (spu_decoder_class_t *this) {
-  return "CMML subtitle decoder plugin";
-}
-
 static void update_src_encoding(void *this_gen, xine_cfg_entry_t *entry)
 {
   spucmml_class_t *this = (spucmml_class_t *)this_gen;
@@ -517,9 +505,9 @@ static void *init_spu_decoder_plugin (xine_t *xine, void *data) {
   this = (spucmml_class_t *) xine_xmalloc (sizeof (spucmml_class_t));
 
   this->class.open_plugin      = spucmml_class_open_plugin;
-  this->class.get_identifier   = spucmml_class_get_identifier;
-  this->class.get_description  = spucmml_class_get_description;
-  this->class.dispose          = spucmml_class_dispose;
+  this->class.identifier       = "spucmml";
+  this->class.description      = N_("CMML subtitle decoder plugin");
+  this->class.dispose          = default_spu_decoder_class_dispose;
 
   this->xine                   = xine;
 
