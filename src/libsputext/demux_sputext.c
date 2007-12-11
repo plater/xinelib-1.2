@@ -1448,14 +1448,6 @@ static demux_plugin_t *open_demux_plugin (demux_class_t *class_gen, xine_stream_
   return NULL;
 }
   
-static const char *get_demux_description (demux_class_t *this_gen) {
-  return "sputext demuxer plugin";
-}
-
-static const char *get_demux_identifier (demux_class_t *this_gen) {
-  return "sputext";
-}
-
 static const char *get_demux_extensions (demux_class_t *this_gen) {
   return "asc txt sub srt smi ssa";
 }
@@ -1465,12 +1457,6 @@ static const char *get_demux_mimetypes (demux_class_t *this_gen) {
 
   /* do not report this mimetype, it might confuse browsers. */
   /* "text/plain: asc txt sub srt: VIDEO subtitles;" */
-}
-
-static void demux_class_dispose (demux_class_t *this_gen) {
-  demux_sputext_class_t *this = (demux_sputext_class_t *) this_gen;
-
-  free (this);
 }
 
 static void config_timeout_cb(void *this_gen, xine_cfg_entry_t *entry) {
@@ -1488,11 +1474,11 @@ static void *init_sputext_demux_class (xine_t *xine, void *data) {
   this = xine_xmalloc (sizeof (demux_sputext_class_t));
 
   this->demux_class.open_plugin     = open_demux_plugin;
-  this->demux_class.get_description = get_demux_description;
-  this->demux_class.get_identifier  = get_demux_identifier;
+  this->demux_class.description     = N_("sputext demuxer plugin");
+  this->demux_class.identifier      = "sputext";
   this->demux_class.get_mimetypes   = get_demux_mimetypes;
   this->demux_class.get_extensions  = get_demux_extensions;
-  this->demux_class.dispose         = demux_class_dispose;
+  this->demux_class.dispose         = default_demux_class_dispose;
 
   /* 
    * Some subtitling formats, namely AQT and Subrip09, define the end of a

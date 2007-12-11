@@ -230,12 +230,6 @@ static int demux_aac_seek (demux_plugin_t *this_gen,
   return this->status;
 }
 
-static void demux_aac_dispose (demux_plugin_t *this_gen) {
-  demux_aac_t *this = (demux_aac_t *) this_gen;
-
-  free(this);
-}
-
 static int demux_aac_get_status (demux_plugin_t *this_gen) {
   demux_aac_t *this = (demux_aac_t *) this_gen;
 
@@ -269,7 +263,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
   this->demux_plugin.send_headers      = demux_aac_send_headers;
   this->demux_plugin.send_chunk        = demux_aac_send_chunk;
   this->demux_plugin.seek              = demux_aac_seek;
-  this->demux_plugin.dispose           = demux_aac_dispose;
+  this->demux_plugin.dispose           = default_demux_plugin_dispose;
   this->demux_plugin.get_status        = demux_aac_get_status;
   this->demux_plugin.get_stream_length = demux_aac_get_stream_length;
   this->demux_plugin.get_capabilities  = demux_aac_get_capabilities;
@@ -308,14 +302,6 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
   return &this->demux_plugin;
 }
 
-static const char *get_description (demux_class_t *this_gen) {
-  return "ADIF/ADTS AAC demux plugin";
-}
-
-static const char *get_identifier (demux_class_t *this_gen) {
-  return "AAC";
-}
-
 static const char *get_extensions (demux_class_t *this_gen) {
   return "aac";
 }
@@ -324,23 +310,17 @@ static const char *get_mimetypes (demux_class_t *this_gen) {
   return NULL;
 }
 
-static void class_dispose (demux_class_t *this_gen) {
-  demux_aac_class_t *this = (demux_aac_class_t *) this_gen;
-
-  free (this);
-}
-
 void *demux_aac_init_plugin (xine_t *xine, void *data) {
   demux_aac_class_t     *this;
 
   this = xine_xmalloc (sizeof (demux_aac_class_t));
 
   this->demux_class.open_plugin     = open_plugin;
-  this->demux_class.get_description = get_description;
-  this->demux_class.get_identifier  = get_identifier;
+  this->demux_class.description     = N_("ADIF/ADTS AAC demux plugin");
+  this->demux_class.identifier      = "AAC";
   this->demux_class.get_mimetypes   = get_mimetypes;
   this->demux_class.get_extensions  = get_extensions;
-  this->demux_class.dispose         = class_dispose;
+  this->demux_class.dispose         = default_demux_class_dispose;
 
   return this;
 }
