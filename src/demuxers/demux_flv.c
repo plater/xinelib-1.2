@@ -306,9 +306,8 @@ static int parse_flv_var(demux_flv_t *this,
       num = _X_BE_32(tmp);
       tmp += 4;
       if (key && keylen == 5 && !strncmp(key, "times", 5)) {
-        if (this->index)
-          free (this->index);
-        this->index = xine_xmalloc(num*sizeof(flv_index_entry_t));
+	free (this->index);
+        this->index = xine_xcalloc(num, sizeof(flv_index_entry_t));
         this->num_indices = num;
         for (num = 0; num < this->num_indices && tmp < end; num++) {
           if (*tmp++ == FLV_DATA_TYPE_NUMBER) {
@@ -685,8 +684,7 @@ static void seek_flv_file(demux_flv_t *this, off_t seek_pos, int seek_pts) {
           return;
         }
         /* check StreamID and CodecID */
-        if (buf[0] == 0 && buf[1] == 0 && buf[2] == 0 &&
-            buf[3] == (this->videocodec | 0x10)) {
+	if ( _X_ME_32(buf) == ME_FOURCC(0, 0, 0, (this->videocodec | 0x10)) ) {
           this->input->seek(this->input, -16, SEEK_CUR);
           lprintf("  ...resynced after %d bytes\n", i);
           return;
@@ -808,8 +806,7 @@ static int demux_flv_seek (demux_plugin_t *this_gen,
 static void demux_flv_dispose (demux_plugin_t *this_gen) {
   demux_flv_t *this = (demux_flv_t *) this_gen;
 
-  if (this->index)
-    free(this->index);
+  free(this->index);
   free(this);
 }
 
@@ -856,13 +853,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
   this->status = DEMUX_FINISHED;
 
   switch (stream->content_detection_method) {
-    case METHOD_BY_EXTENSION:
-      if (!_x_demux_check_extension(input->get_mrl(input), "flv")) {
-        free (this);
-        return NULL;
-      }
-  
-  /* falling through is intended */  
+    case METHOD_BY_MRL:
     case METHOD_BY_CONTENT:
     case METHOD_EXPLICIT:
       if (!open_flv_file(this)) {
@@ -879,39 +870,17 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
   return &this->demux_plugin;
 }
 
-static const char *get_description (demux_class_t *this_gen) {
-  return "Flash Video file demux plugin";
-}
-
-static const char *get_identifier (demux_class_t *this_gen) {
-  return "FLV";
-}
-
-static const char *get_extensions (demux_class_t *this_gen) {
-  return "flv";
-}
-
-static const char *get_mimetypes (demux_class_t *this_gen) {
-  return "video/x-flv: flv: Flash video;";
-}
-
-static void class_dispose (demux_class_t *this_gen) {
-  demux_flv_class_t *this = (demux_flv_class_t *) this_gen;
-
-  free (this);
-}
-
 static void *init_plugin (xine_t *xine, void *data) {
   demux_flv_class_t     *this;
 
   this = xine_xmalloc (sizeof (demux_flv_class_t));
 
   this->demux_class.open_plugin     = open_plugin;
-  this->demux_class.get_description = get_description;
-  this->demux_class.get_identifier  = get_identifier;
-  this->demux_class.get_mimetypes   = get_mimetypes;
-  this->demux_class.get_extensions  = get_extensions;
-  this->demux_class.dispose         = class_dispose;
+  this->demux_class.description     = N_("Flash Video file demux plugin");
+  this->demux_class.identifier      = "FLV";
+  this->demux_class.mimetypes       = "video/x-flv: flv: Flash video;";
+  this->demux_class.extensions      = "flv";
+  this->demux_class.dispose         = default_demux_class_dispose;
 
   return this;
 }
@@ -925,6 +894,6 @@ static const demuxer_info_t demux_info_flv = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */
-  { PLUGIN_DEMUX, 26, "flashvideo", XINE_VERSION_CODE, &demux_info_flv, init_plugin },
+  { PLUGIN_DEMUX, 27, "flashvideo", XINE_VERSION_CODE, &demux_info_flv, init_plugin },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };

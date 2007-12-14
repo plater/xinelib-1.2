@@ -1,36 +1,11 @@
 include $(top_srcdir)/misc/Makefile.common
 
-LIBTOOL = $(SHELL) $(top_builddir)/libtool
-noinst_LTLIBRARIES = libxineutils.la
+AM_CFLAGS   = $(DEFAULT_OCFLAGS) $(X_CFLAGS) $(VISIBILITY_FLAG)
+AM_CPPFLAGS = -DXINE_LIBRARY_COMPILE
 
 EXTRA_DIST = ppcasm_string.S ppc_asm.tmpl
 
-if PPC_ARCH
-if !HOST_OS_DARWIN
-pppc_files = ppcasm_string.S
-endif
-endif
-
-AM_CFLAGS = $(X_CFLAGS) $(VISIBILITY_FLAG)
-AM_CPPFLAGS=-DXINE_LIBRARY_COMPILE
-
-libxineutils_la_SOURCES = $(pppc_files) \
-	cpu_accel.c \
-	color.c \
-	copy.c \
-	list.c \
-	memcpy.c \
-	monitor.c \
-	utils.c \
-	xine_check.c \
-	xine_mutex.c \
-	xmllexer.c \
-	xine_buffer.c \
-	xmlparser.c \
-	array.c \
-	sorted_array.c \
-	pool.c \
-	ring_buffer.c
+noinst_HEADERS = ppcasm_string.h xine_check.h
 
 xineinclude_HEADERS = \
 	attributes.h \
@@ -45,6 +20,29 @@ xineinclude_HEADERS = \
 	pool.h \
 	ring_buffer.h
 
+noinst_LTLIBRARIES = libxineutils.la
 
-noinst_HEADERS = ppcasm_string.h xine_check.h
+if ARCH_PPC
+if !HOST_OS_DARWIN
+pppc_files = ppcasm_string.S
+endif
+endif
 
+libxineutils_la_SOURCES = $(pppc_files) \
+	cpu_accel.c \
+	color.c \
+	copy.c \
+	crc.c \
+	list.c \
+	memcpy.c \
+	monitor.c \
+	utils.c \
+	xine_check.c \
+	xine_mutex.c \
+	xmllexer.c \
+	xine_buffer.c \
+	xmlparser.c \
+	array.c \
+	sorted_array.c \
+	pool.c \
+	ring_buffer.c
