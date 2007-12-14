@@ -87,12 +87,9 @@ static uint32_t aa_get_capabilities (vo_driver_t *this) {
 static void aa_dispose_frame (vo_frame_t *vo_img) {
   aa_frame_t *frame = (aa_frame_t *)vo_img;
   
-  if (frame->mem[0])
-    free (frame->mem[0]);
-  if (frame->mem[1])
-    free (frame->mem[1]);
-  if (frame->mem[2])
-    free (frame->mem[2]);
+  free (frame->mem[0]);
+  free (frame->mem[1]);
+  free (frame->mem[2]);
 
   free (frame);
 }
@@ -132,19 +129,9 @@ static void aa_update_frame_format (vo_driver_t *this_gen, vo_frame_t *img,
   if ((frame->width != width) || (frame->height != height) 
       || (frame->format != format)) {
 
-    if (frame->mem[0]) {
-      free (frame->mem[0]);
-      frame->mem[0] = NULL;
-    }
-    if (frame->mem[1]) {
-      free (frame->mem[1]);
-      frame->mem[1] = NULL;
-    }
-      
-    if (frame->mem[2]) {
-      free (frame->mem[2]);
-      frame->mem[2] = NULL;
-    }
+    free (frame->mem[0]); frame->mem[0] = NULL;
+    free (frame->mem[1]); frame->mem[1] = NULL;
+    free (frame->mem[2]); frame->mem[2] = NULL;
 
     frame->width  = width;
     frame->height = height;
@@ -300,18 +287,6 @@ static vo_driver_t *open_plugin (video_driver_class_t *class_gen, const void *vi
   return &this->vo_driver;
 }    
 
-static char* get_identifier (video_driver_class_t *this_gen) {
-  return "AA";
-}
-
-static char* get_description (video_driver_class_t *this_gen) {
-  return _("xine video output plugin using the ascii-art library");
-}
-
-static void dispose_class (video_driver_class_t *this_gen) {
-  aa_class_t   *this = (aa_class_t *) this_gen;
-  free(this);
-}
 static void *init_class (xine_t *xine, void *visual_gen) {
   /* aa_context    *context = (aa_context*) visual_gen; */
   aa_class_t    *this;
@@ -319,9 +294,9 @@ static void *init_class (xine_t *xine, void *visual_gen) {
   this = (aa_class_t *) xine_xmalloc(sizeof(aa_class_t));
   
   this->driver_class.open_plugin     = open_plugin;
-  this->driver_class.get_identifier  = get_identifier;
-  this->driver_class.get_description = get_description;
-  this->driver_class.dispose         = dispose_class;
+  this->driver_class.identifier      = "AA";
+  this->driver_class.description     = N_("xine video output plugin using the ascii-art library");
+  this->driver_class.dispose         = default_video_driver_class_dispose;
   
   this->config            = xine->config;
   this->xine              = xine;
@@ -336,6 +311,6 @@ static const vo_info_t vo_info_aa = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */  
-  { PLUGIN_VIDEO_OUT, 21, "aa", XINE_VERSION_CODE, &vo_info_aa, init_class },
+  { PLUGIN_VIDEO_OUT, 22, "aa", XINE_VERSION_CODE, &vo_info_aa, init_class },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };

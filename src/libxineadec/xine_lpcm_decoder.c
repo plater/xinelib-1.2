@@ -16,10 +16,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110, USA
- *
- * 31-8-2001 Added LPCM rate sensing.
- *   (c) 2001 James Courtier-Dutton James@superbug.demon.co.uk
  */
+
+/**
+ * @file
+ * @author James Courtier-Dutton <james@superbug.demon.co.uk>
+ *
+ * @date 2001-08-31 Added LPCM rate sensing
+ */
+
 #ifndef __sun
 #define _XOPEN_SOURCE 500
 #endif
@@ -58,7 +63,7 @@ typedef struct lpcm_decoder_s {
   uint32_t         ao_cap_mode; 
    
   int              output_open;
-  int		   cpu_be;	/* TRUE, if we're a Big endian CPU */
+  int		   cpu_be;	/**< TRUE, if we're a Big endian CPU */
 } lpcm_decoder_t;
 
 static void lpcm_reset (audio_decoder_t *this_gen) {
@@ -243,18 +248,6 @@ static audio_decoder_t *open_plugin (audio_decoder_class_t *class_gen, xine_stre
   return &this->audio_decoder;
 }
 
-static char *get_identifier (audio_decoder_class_t *this) {
-  return "Linear PCM";
-}
-
-static char *get_description (audio_decoder_class_t *this) {
-  return "Linear PCM audio decoder plugin";
-}
-
-static void dispose_class (audio_decoder_class_t *this) {
-  free (this);
-}
-
 static void *init_plugin (xine_t *xine, void *data) {
 
   lpcm_class_t *this ;
@@ -262,9 +255,9 @@ static void *init_plugin (xine_t *xine, void *data) {
   this = (lpcm_class_t *) xine_xmalloc (sizeof (lpcm_class_t));
 
   this->decoder_class.open_plugin     = open_plugin;
-  this->decoder_class.get_identifier  = get_identifier;
-  this->decoder_class.get_description = get_description;
-  this->decoder_class.dispose         = dispose_class;
+  this->decoder_class.identifier      = "Linear PCM";
+  this->decoder_class.description     = N_("Linear PCM audio decoder plugin");
+  this->decoder_class.dispose         = default_audio_decoder_class_dispose;
 
   return this;
 }
@@ -280,6 +273,6 @@ static const decoder_info_t dec_info_audio = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */  
-  { PLUGIN_AUDIO_DECODER, 15, "pcm", XINE_VERSION_CODE, &dec_info_audio, init_plugin },
+  { PLUGIN_AUDIO_DECODER, 16, "pcm", XINE_VERSION_CODE, &dec_info_audio, init_plugin },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };

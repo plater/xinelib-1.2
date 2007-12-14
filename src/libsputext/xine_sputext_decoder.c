@@ -244,8 +244,9 @@ static void update_output_size (sputext_decoder_t *this) {
   }
 }
 
-static int parse_utf8_size(unsigned char *c)
+static int parse_utf8_size(const void *buf)
 {
+  const uint8_t *c = buf;
   if ( c[0]<0x80 )
       return 1;
   
@@ -887,14 +888,6 @@ static void sputext_class_dispose (spu_decoder_class_t *class_gen) {
   free (this);
 }
 
-static char *sputext_class_get_identifier (spu_decoder_class_t *this) {
-  return "sputext";
-}
-
-static char *sputext_class_get_description (spu_decoder_class_t *this) {
-  return "external subtitle decoder plugin";
-}
-
 static void update_src_encoding(void *class_gen, xine_cfg_entry_t *entry)
 {
   sputext_class_t *class = (sputext_class_t *)class_gen;
@@ -905,7 +898,7 @@ static void update_src_encoding(void *class_gen, xine_cfg_entry_t *entry)
 
 static void *init_spu_decoder_plugin (xine_t *xine, void *data) {
 
-  static const char *subtitle_size_strings[] = { 
+  static const char *const subtitle_size_strings[] = { 
     "tiny", "small", "normal", "large", "very large", "huge", NULL 
   };
   sputext_class_t *this ;
@@ -915,8 +908,8 @@ static void *init_spu_decoder_plugin (xine_t *xine, void *data) {
   this = (sputext_class_t *) xine_xmalloc (sizeof (sputext_class_t));
 
   this->class.open_plugin      = sputext_class_open_plugin;
-  this->class.get_identifier   = sputext_class_get_identifier;
-  this->class.get_description  = sputext_class_get_description;
+  this->class.identifier       = "sputext";
+  this->class.description      = N_("external subtitle decoder plugin");
   this->class.dispose          = sputext_class_dispose;
 
   this->xine                   = xine;
@@ -994,6 +987,6 @@ static const decoder_info_t spudec_info = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */  
-  { PLUGIN_SPU_DECODER | PLUGIN_MUST_PRELOAD, 16, "sputext", XINE_VERSION_CODE, &spudec_info, &init_spu_decoder_plugin },
+  { PLUGIN_SPU_DECODER | PLUGIN_MUST_PRELOAD, 17, "sputext", XINE_VERSION_CODE, &spudec_info, &init_spu_decoder_plugin },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };
