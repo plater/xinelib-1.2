@@ -54,23 +54,31 @@ struct post_class_s {
 				 xine_audio_port_t **audio_target,
 				 xine_video_port_t **video_target);
   
-  /*
-   * return short, human readable identifier for this plugin class
+  /**
+   * @brief short human readable identifier for this plugin class
    */
-  char* (*get_identifier) (post_class_t *this);
+  const char *identifier;
 
-  /*
-   * return human readable (verbose = 1 line) description for 
-   * this plugin class
+  /**
+   * @brief human readable (verbose = 1 line) description for this plugin class
+   *
+   * The description is passed to gettext() to internationalise.
    */
-  char* (*get_description) (post_class_t *this);
+  const char *description;
 
+  /**
+   * @brief Optional non-standard catalog to use with dgettext() for description.
+   */
+  const char *textdomain;
+  
   /*
    * free all class-related resources
    */
 
   void (*dispose) (post_class_t *this);
 };
+
+#define default_post_class_dispose (void (*) (post_class_t *this))free
 
 struct post_plugin_s {
 
@@ -88,9 +96,6 @@ struct post_plugin_s {
    * close down, free all resources
    */
   void (*dispose) (post_plugin_t *this);
-  
-  /* has dispose been called */
-  int                 dispose_pending;
   
   /* plugins don't have to init the stuff below */
   
@@ -116,6 +121,9 @@ struct post_plugin_s {
 
   /* used by plugin loader */
   void               *node;
+
+  /* has dispose been called */
+  int                 dispose_pending;
 };
 
 /* helper function to initialize a post_plugin_t */
@@ -177,6 +185,13 @@ struct post_video_port_s {
   /* the new frame function pointers */
   vo_frame_t               *new_frame;
   
+  /* if you want to decide yourself, whether the preprocessing functions
+   * should still be routed when draw is intercepted, fill in this
+   * function; _x_post_intercept_video_frame() acts as a template method
+   * and asks your function; return a boolean; the default is _not_ to
+   * route preprocessing functions when draw is intercepted */
+  int (*route_preprocessing_procs)(post_video_port_t *self, vo_frame_t *frame);
+
   /* if you want to decide yourself, whether the overlay manager should
    * be intercepted, fill in this function; get_overlay_manager() acts as
    * a template method and asks your function; return a boolean;
@@ -287,16 +302,16 @@ struct post_audio_port_s {
   /* the original port to call its functions from inside yours */
   xine_audio_port_t *original_port;
   
-  /* usage counter: how many objects are floating around that need
-   * these pointers to exist */
-  int                usage_count;
-  pthread_mutex_t    usage_lock;
-  
   /* the stream we are being fed by; NULL means no stream is connected;
    * this may be an anonymous stream */
   xine_stream_t     *stream;
   
-  /* some values remembered by port->open() */
+  pthread_mutex_t    usage_lock;
+  /* usage counter: how many objects are floating around that need
+   * these pointers to exist */
+  int                usage_count;
+  
+  /* some values remembered by (port->open) () */
   uint32_t           bits;
   uint32_t           rate;
   uint32_t           mode;
