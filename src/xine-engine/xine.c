@@ -46,6 +46,8 @@
 #include <locale.h>
 #endif
 
+#include <basedir.h>
+
 #define LOG_MODULE "xine"
 #define LOG_VERBOSE
 /*
@@ -67,6 +69,7 @@
 #include "metronom.h"
 #include "configfile.h"
 #include "osd.h"
+#include "spu.h"
 
 #include "xineutils.h"
 #include "compat.h"
@@ -293,8 +296,37 @@ static void ticket_revoke(xine_ticket_t *this, int atomic) {
     pthread_mutex_unlock(&this->revoke_lock);
 }
 
+static int ticket_lock_port_rewiring(xine_ticket_t *this, int ms_timeout) {
+
+  if (ms_timeout >= 0) {
+    struct timespec abstime;
+
+    struct timeval now;
+    gettimeofday(&now, 0);
+
+    abstime.tv_sec = now.tv_sec + ms_timeout / 1000;
+    abstime.tv_nsec = now.tv_usec * 1000 + (ms_timeout % 1000) * 1e6;
+
+    if (abstime.tv_nsec > 1e9) {
+      abstime.tv_nsec -= 1e9;
+      abstime.tv_sec++;
+    }
+
+    return (0 == pthread_mutex_timedlock(&this->port_rewiring_lock, &abstime));
+  }
+
+  pthread_mutex_lock(&this->port_rewiring_lock);
+  return 1;
+}
+
+static void ticket_unlock_port_rewiring(xine_ticket_t *this) {
+
+  pthread_mutex_unlock(&this->port_rewiring_lock);
+}
+
 static void ticket_dispose(xine_ticket_t *this) {
 
+  pthread_mutex_destroy(&this->port_rewiring_lock);
   pthread_mutex_destroy(&this->lock);
   pthread_mutex_destroy(&this->revoke_lock);
   pthread_cond_destroy(&this->issued);
@@ -315,12 +347,15 @@ static xine_ticket_t *ticket_init(void) {
   port_ticket->renew                = ticket_renew;
   port_ticket->issue                = ticket_issue;
   port_ticket->revoke               = ticket_revoke;
+  port_ticket->lock_port_rewiring   = ticket_lock_port_rewiring;
+  port_ticket->unlock_port_rewiring = ticket_unlock_port_rewiring;
   port_ticket->dispose              = ticket_dispose;
   port_ticket->holder_thread_count = XINE_MAX_TICKET_HOLDER_THREADS;
   port_ticket->holder_threads = calloc(XINE_MAX_TICKET_HOLDER_THREADS,sizeof(*port_ticket->holder_threads));
   
   pthread_mutex_init(&port_ticket->lock, NULL);
   pthread_mutex_init(&port_ticket->revoke_lock, NULL);
+  pthread_mutex_init(&port_ticket->port_rewiring_lock, NULL);
   pthread_cond_init(&port_ticket->issued, NULL);
   pthread_cond_init(&port_ticket->revoked, NULL);
   
@@ -514,6 +549,7 @@ static int stream_rewire_audio(xine_post_out_t *output, void *data)
   if (!data)
     return 0;
 
+  stream->xine->port_ticket->lock_port_rewiring(stream->xine->port_ticket, -1);
   stream->xine->port_ticket->revoke(stream->xine->port_ticket, 1);
   
   if (stream->audio_out->status(stream->audio_out, stream, &bits, &rate, &mode)) {
@@ -524,6 +560,7 @@ static int stream_rewire_audio(xine_post_out_t *output, void *data)
   stream->audio_out = new_port;
   
   stream->xine->port_ticket->issue(stream->xine->port_ticket, 1);
+  stream->xine->port_ticket->unlock_port_rewiring(stream->xine->port_ticket);
 
   return 1;
 }
@@ -538,6 +575,7 @@ static int stream_rewire_video(xine_post_out_t *output, void *data)
   if (!data)
     return 0;
 
+  stream->xine->port_ticket->lock_port_rewiring(stream->xine->port_ticket, -1);
   stream->xine->port_ticket->revoke(stream->xine->port_ticket, 1);
   
   if (stream->video_out->status(stream->video_out, stream, &width, &height, &img_duration)) {
@@ -548,6 +586,7 @@ static int stream_rewire_video(xine_post_out_t *output, void *data)
   stream->video_out = new_port;
   
   stream->xine->port_ticket->issue(stream->xine->port_ticket, 1);
+  stream->xine->port_ticket->unlock_port_rewiring(stream->xine->port_ticket);
 
   return 1;
 }
@@ -691,9 +730,10 @@ xine_stream_t *xine_stream_new (xine_t *this,
   /*
    * osd
    */
-  if (vo)
+  if (vo) {
+    _x_spu_misc_init (this);
     stream->osd_renderer = _x_osd_renderer_init(stream);
-  else
+  } else
     stream->osd_renderer = NULL;
 
   /*
@@ -829,11 +869,12 @@ void _x_flush_events_queues (xine_stream_t *stream) {
       int res;
 
       xine_log (stream->xine, XINE_LOG_MSG, _("xine: found input plugin  : %s\n"),
-		stream->input_plugin->input_class->get_description(stream->input_plugin->input_class));
+		dgettext(stream->input_plugin->input_class->textdomain ? : XINE_TEXTDOMAIN,
+			 stream->input_plugin->input_class->description));
       if (stream->input_plugin->input_class->eject_media)
         stream->eject_class = stream->input_plugin->input_class;
       _x_meta_info_set_utf8(stream, XINE_META_INFO_INPUT_PLUGIN, 
-			    (stream->input_plugin->input_class->get_identifier (stream->input_plugin->input_class)));
+			    stream->input_plugin->input_class->identifier);
 
       res = (stream->input_plugin->open) (stream->input_plugin);
       switch(res) {
@@ -890,7 +931,7 @@ void _x_flush_events_queues (xine_stream_t *stream) {
 	  }
 
 	  _x_meta_info_set_utf8(stream, XINE_META_INFO_SYSTEMLAYER,
-				(stream->demux_plugin->demux_class->get_identifier(stream->demux_plugin->demux_class)));
+				stream->demux_plugin->demux_class->identifier);
 	  free(demux_name);
 	} else {
 	  xprintf(stream->xine, XINE_VERBOSITY_LOG, _("xine: error while parsing mrl\n"));
@@ -965,7 +1006,7 @@ void _x_flush_events_queues (xine_stream_t *stream) {
 	  lprintf ("demux and input plugin found\n");
 
 	  _x_meta_info_set_utf8(stream, XINE_META_INFO_SYSTEMLAYER,
-				(stream->demux_plugin->demux_class->get_identifier(stream->demux_plugin->demux_class)));
+				stream->demux_plugin->demux_class->identifier);
 	  free(demux_name);
 	} else {
 	  xprintf(stream->xine, XINE_VERBOSITY_LOG, _("xine: error while parsing mrl\n"));
@@ -1171,11 +1212,12 @@ void _x_flush_events_queues (xine_stream_t *stream) {
     lprintf ("demux and input plugin found\n");
 
     _x_meta_info_set_utf8(stream, XINE_META_INFO_SYSTEMLAYER,
-			  (stream->demux_plugin->demux_class->get_identifier(stream->demux_plugin->demux_class)));
+			  stream->demux_plugin->demux_class->identifier);
   }
 
   xine_log (stream->xine, XINE_LOG_MSG, _("xine: found demuxer plugin: %s\n"),
-	    stream->demux_plugin->demux_class->get_description(stream->demux_plugin->demux_class));
+	    dgettext(stream->demux_plugin->demux_class->textdomain ? : XINE_TEXTDOMAIN,
+		     stream->demux_plugin->demux_class->description));
 
   _x_extra_info_reset( stream->current_extra_info );
   _x_extra_info_reset( stream->video_decoder_extra_info );
@@ -1499,6 +1541,8 @@ void xine_exit (xine_t *this) {
   WSACleanup();
 #endif
 
+  xdgFreeHandle(this->basedir_handle);
+
   free (this);
 }
 
@@ -1597,9 +1641,8 @@ static void config_demux_strategy_cb (void *this_gen, xine_cfg_entry_t *entry) {
 
 static void config_save_cb (void *this_gen, xine_cfg_entry_t *entry) {
   xine_t *this = (xine_t *)this_gen;
-  char *homedir_trail_slash;
+  char homedir_trail_slash[strlen(xine_get_homedir()) + 2];
 
-  homedir_trail_slash = (char *)malloc(strlen(xine_get_homedir()) + 2);
   sprintf(homedir_trail_slash, "%s/", xine_get_homedir());
   if (entry->str_value[0] &&
       (entry->str_value[0] != '/' || strstr(entry->str_value, "/.") ||
@@ -1619,13 +1662,15 @@ static void config_save_cb (void *this_gen, xine_cfg_entry_t *entry) {
     pthread_mutex_unlock(&this->streams_lock);
   }
   
-  free(homedir_trail_slash);
   this->save_path = entry->str_value;
 }
 
 void xine_init (xine_t *this) {
-  static const char *demux_strategies[] = {"default", "reverse", "content",
-					   "extension", NULL};
+  static const char *const demux_strategies[] = {"default", "reverse", "content",
+						 "extension", NULL};
+
+  /* First of all, initialise libxdg-basedir as it's used by plugins. */
+  this->basedir_handle = xdgAllocHandle();
 
   /* initialize color conversion tables and functions */
   init_yuv_conversion();
@@ -2058,6 +2103,9 @@ const char *const *xine_get_log_names (xine_t *this) {
 
 static inline void check_log_alloc (xine_t *this, int buf)
 {
+  if ( this->log_buffers[buf] )
+    return;
+
   pthread_mutex_lock (&this->log_lock);
 
   if ( ! this->log_buffers[buf] )
@@ -2156,4 +2204,84 @@ int _x_query_buffer_usage(xine_stream_t *stream, int *num_video_buffers, int *nu
     stream->xine->port_ticket->release_nonblocking(stream->xine->port_ticket, 1);
 
   return ticket_acquired != 0;
+}
+
+int _x_lock_port_rewiring(xine_t *xine, int ms_timeout)
+{
+  return xine->port_ticket->lock_port_rewiring(xine->port_ticket, ms_timeout);
+}
+
+void _x_unlock_port_rewiring(xine_t *xine)
+{
+  xine->port_ticket->unlock_port_rewiring(xine->port_ticket);
+}
+
+int _x_lock_frontend(xine_stream_t *stream, int ms_to_time_out)
+{
+  if (ms_to_time_out >= 0) {
+    struct timespec abstime;
+
+    struct timeval now;
+    gettimeofday(&now, 0);
+
+    abstime.tv_sec = now.tv_sec + ms_to_time_out / 1000;
+    abstime.tv_nsec = now.tv_usec * 1000 + (ms_to_time_out % 1000) * 1e6;
+
+    if (abstime.tv_nsec > 1e9) {
+      abstime.tv_nsec -= 1e9;
+      abstime.tv_sec++;
+    }
+
+    return (0 == pthread_mutex_timedlock(&stream->frontend_lock, &abstime));
+  }
+
+  pthread_mutex_lock(&stream->frontend_lock);
+  return 1;
+}
+
+void _x_unlock_frontend(xine_stream_t *stream)
+{
+  pthread_mutex_unlock(&stream->frontend_lock);
+}
+
+int _x_query_unprocessed_osd_events(xine_stream_t *stream)
+{
+  video_overlay_manager_t *ovl;
+  int redraw_needed;
+  
+  if (!stream->xine->port_ticket->acquire_nonblocking(stream->xine->port_ticket, 1))
+    return -1;
+
+  ovl = stream->video_out->get_overlay_manager(stream->video_out);
+  redraw_needed = ovl->redraw_needed(ovl, 0);
+ 
+  if (redraw_needed) 
+    stream->video_out->trigger_drawing(stream->video_out);
+
+  stream->xine->port_ticket->release_nonblocking(stream->xine->port_ticket, 1);
+
+  return redraw_needed;
+}
+
+int _x_demux_seek(xine_stream_t *stream, off_t start_pos, int start_time, int playing)
+{
+  if (!stream->demux_plugin)
+    return -1;
+  return stream->demux_plugin->seek(stream->demux_plugin, start_pos, start_time, playing);
+}
+
+int _x_continue_stream_processing(xine_stream_t *stream)
+{
+  return stream->status != XINE_STATUS_STOP
+    && stream->status != XINE_STATUS_QUIT;
+}
+
+void _x_trigger_relaxed_frame_drop_mode(xine_stream_t *stream)
+{
+  stream->first_frame_flag = 2;
+}
+
+void _x_reset_relaxed_frame_drop_mode(xine_stream_t *stream)
+{
+  stream->first_frame_flag = 1;
 }

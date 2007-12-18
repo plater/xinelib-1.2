@@ -127,6 +127,9 @@ struct vo_frame_s {
   /* cropping to be done */
   int                        crop_left, crop_right, crop_top, crop_bottom;
 
+  int                        lock_counter;
+  pthread_mutex_t            mutex; /* protect access to lock_count */
+
   /* extra info coming from input or demuxers */
   extra_info_t              *extra_info;    
  
@@ -155,8 +158,6 @@ struct vo_frame_s {
    * obs: changing anything here will require recompiling vo drivers
    */
   struct vo_frame_s         *next;
-  int                        lock_counter;
-  pthread_mutex_t            mutex; /* protect access to lock_count */
   
   int                        id; /* debugging - track this frame */
   int                        is_first;
@@ -201,6 +202,9 @@ struct xine_video_port_s {
 
   /* flush video_out fifo */
   void (*flush) (xine_video_port_t *self);
+
+  /* trigger immediate drawing */
+  void (*trigger_drawing) (xine_video_port_t *self);
 
   /* Get/Set video property
    *
@@ -287,7 +291,7 @@ struct xine_video_port_s {
  * from generic vo functions.
  */
 
-#define VIDEO_OUT_DRIVER_IFACE_VERSION  21
+#define VIDEO_OUT_DRIVER_IFACE_VERSION  22
 
 struct vo_driver_s {
 
@@ -365,23 +369,30 @@ struct video_driver_class_s {
    */
   vo_driver_t* (*open_plugin) (video_driver_class_t *self, const void *visual);
   
-  /*
-   * return short, human readable identifier for this plugin class
+  /**
+   * @brief short human readable identifier for this plugin class
    */
-  char* (*get_identifier) (video_driver_class_t *self);
+  const char *identifier;
 
-  /*
-   * return human readable (verbose = 1 line) description for 
-   * this plugin class
+  /**
+   * @brief human readable (verbose = 1 line) description for this plugin class
+   *
+   * The description is passed to gettext() to internationalise.
    */
-  char* (*get_description) (video_driver_class_t *self);
+  const char *description;
 
+  /**
+   * @brief Optional non-standard catalog to use with dgettext() for description.
+   */
+  const char *textdomain;
+  
   /*
    * free all class-related resources
    */
   void (*dispose) (video_driver_class_t *self);
 };
 
+#define default_video_driver_class_dispose (void (*) (video_driver_class_t *this))free
 
 typedef struct rle_elem_s {
   uint16_t len;
@@ -440,11 +451,12 @@ struct video_overlay_manager_s {
                                   vo_driver_t *output, vo_frame_t *vo_img, int enabled);
 };
 
-/*
- * build a video_out_port from
- * a given video driver
+/**
+ * @brief Build a video output port from a given video driver.
+ *
+ * @internal
  */
-xine_video_port_t *_x_vo_new_port (xine_t *xine, vo_driver_t *driver, int grabonly) XINE_PROTECTED;
+xine_video_port_t *_x_vo_new_port (xine_t *xine, vo_driver_t *driver, int grabonly);
 
 #ifdef __cplusplus
 }

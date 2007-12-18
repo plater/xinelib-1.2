@@ -458,7 +458,7 @@ rmff_header_t *real_parse_sdp(char *data, char **stream_rules, uint32_t bandwidt
       desc->copyright,
       desc->abstract);
   header->data=rmff_new_dataheader(0,0);
-  header->streams = xine_xmalloc(sizeof(rmff_mdpr_t*)*(desc->stream_count+1));
+  header->streams = xine_xcalloc((desc->stream_count+1), sizeof(rmff_mdpr_t*));
   lprintf("number of streams: %u\n", desc->stream_count);
 
   for (i=0; i<desc->stream_count; i++) {
@@ -660,7 +660,7 @@ rmff_header_t  *real_setup_and_get_header(rtsp_t *rtsp_session, uint32_t bandwid
     
   lprintf("Stream description size: %i\n", size);
 
-  description = malloc(sizeof(char)*(size+1));
+  description = calloc(size+1, sizeof(char));
 
   if( rtsp_read_data(rtsp_session, description, size) <= 0) {
     xine_buffer_free(buf);

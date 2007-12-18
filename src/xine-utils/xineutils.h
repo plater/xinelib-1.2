@@ -621,11 +621,9 @@ void xine_profiler_print_results (void) XINE_PROTECTED;
  * Allocate and clean memory size_t 'size', then return the pointer
  * to the allocated memory.
  */
-#if !defined(__GNUC__) || __GNUC__ < 3
-void *xine_xmalloc(size_t size) XINE_PROTECTED;
-#else
-void *xine_xmalloc(size_t size) __attribute__ ((__malloc__)) XINE_PROTECTED;
-#endif
+void *xine_xmalloc(size_t size) XINE_MALLOC XINE_PROTECTED;
+
+void *xine_xcalloc(size_t nmemb, size_t size) XINE_MALLOC XINE_PROTECTED;
 
 /*
  * Same as above, but memory is aligned to 'alignement'.
@@ -783,7 +781,7 @@ extern void yuy2_to_yuy2
    int width, int height) XINE_PROTECTED;
 
 /* print a hexdump of the given data */
-void xine_hexdump (const char *buf, int length) XINE_PROTECTED;
+void xine_hexdump (const void *buf, int length) XINE_PROTECTED;
 
 /*
  * Optimization macros for conditions
@@ -971,6 +969,11 @@ const char *xine_guess_spu_encoding(void) XINE_PROTECTED;
  * note: it will be a monotonic clock, if available.
  */
 int xine_monotonic_clock(struct timeval *tv, struct timezone *tz) XINE_PROTECTED;
+
+/**
+ * CRC functions
+ */
+uint32_t _x_compute_crc32 (const uint8_t * data, int32_t length, uint32_t crc32) XINE_PROTECTED;
 
 /* don't harm following code */
 #ifdef extern

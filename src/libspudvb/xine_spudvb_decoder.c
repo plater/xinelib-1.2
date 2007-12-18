@@ -28,6 +28,7 @@
 #include "pthread.h"
 #include <errno.h>
 #include "xine_internal.h"
+#include "spu.h"
 #include "osd.h"
 #define MAX_REGIONS 7
 
@@ -315,6 +316,24 @@ static void decode_4bit_pixel_code_string (dvb_spu_decoder_t * this, int r, int 
   }
 }
 
+static void recalculate_trans (dvb_spu_decoder_t *this)
+{
+  dvbsub_func_t *const dvbsub = this->dvbsub;
+  xine_spu_opacity_t opacity;
+  int i;
+
+  _x_spu_get_opacity (this->stream->xine, &opacity);
+  for (i = 0; i < MAX_REGIONS * 256; ++i) {
+    /* ETSI-300-743 says "full transparency if Y == 0". */
+    if (dvbsub->colours[i].y == 0)
+      dvbsub->trans[i] = 0;
+    else {
+      int v = _x_spu_calculate_opacity (&dvbsub->colours[i], dvbsub->colours[i].foo, &opacity);
+      dvbsub->trans[i] = v * 14 / 255 + 1;
+    }
+  }
+    
+}
 
 static void set_clut(dvb_spu_decoder_t *this,int CLUT_id,int CLUT_entry_id,int Y_value, int Cr_value, int Cb_value, int T_value) {
  
@@ -327,13 +346,7 @@ static void set_clut(dvb_spu_decoder_t *this,int CLUT_id,int CLUT_entry_id,int Y
   dvbsub->colours[(CLUT_id*256)+CLUT_entry_id].y=Y_value;
   dvbsub->colours[(CLUT_id*256)+CLUT_entry_id].cr=Cr_value;
   dvbsub->colours[(CLUT_id*256)+CLUT_entry_id].cb=Cb_value;
-
-  if (Y_value==0) {
-    dvbsub->trans[(CLUT_id*256)+CLUT_entry_id]=T_value;
-  } else {
-    dvbsub->trans[(CLUT_id*256)+CLUT_entry_id]=255;
-  }
-
+  dvbsub->colours[(CLUT_id*256)+CLUT_entry_id].foo = T_value;
 }
 
 static void process_CLUT_definition_segment(dvb_spu_decoder_t *this) {
@@ -836,6 +849,7 @@ static void spudec_decode_data (spu_decoder_t * this_gen, buf_element_t * buf)
               process_object_data_segment (this);
               break;
             case 0x80:		/* Page is now completely rendered */
+              recalculate_trans(this);
 	      draw_subtitles( this );
               break;
             default:
@@ -931,6 +945,18 @@ static spu_decoder_t *dvb_spu_class_open_plugin (spu_decoder_class_t * class_gen
     this->dvbsub->regions[i].CLUT_id = 0;
   }
 
+  {
+    xine_spu_opacity_t opacity;
+    static const clut_t black = { 0, 0, 0, 0 };
+    int t;
+
+    _x_spu_get_opacity (this->stream->xine, &opacity);
+    t = _x_spu_calculate_opacity (&black, 0, &opacity);
+
+    for (i = 0; i < MAX_REGIONS * 256; i++)
+      this->dvbsub->colours[i].foo = t;
+  }
+
   pthread_mutex_init(&this->dvbsub_osd_mutex, NULL);
   pthread_cond_init(&this->dvbsub_restart_timeout, NULL);
   this->dvbsub_hide_timeout.tv_nsec = 0;
@@ -940,21 +966,6 @@ static spu_decoder_t *dvb_spu_class_open_plugin (spu_decoder_class_t * class_gen
   return (spu_decoder_t *) this;
 }
 
-static void dvb_spu_class_dispose (spu_decoder_class_t * this)
-{
-  free (this);
-}
-
-static char *dvb_spu_class_get_identifier (spu_decoder_class_t * this)
-{
-  return "spudvb";
-}
-
-static char *dvb_spu_class_get_description (spu_decoder_class_t * this)
-{
-  return "DVB subtitle decoder plugin";
-}
-
 static void *init_spu_decoder_plugin (xine_t * xine, void *data)
 {
 
@@ -962,9 +973,9 @@ static void *init_spu_decoder_plugin (xine_t * xine, void *data)
   this = (dvb_spu_class_t *) xine_xmalloc (sizeof (dvb_spu_class_t));
 
   this->class.open_plugin = dvb_spu_class_open_plugin;
-  this->class.get_identifier = dvb_spu_class_get_identifier;
-  this->class.get_description = dvb_spu_class_get_description;
-  this->class.dispose = dvb_spu_class_dispose;
+  this->class.identifier  = "spudvb";
+  this->class.description = N_("DVB subtitle decoder plugin");
+  this->class.dispose = default_spu_decoder_class_dispose;
 
   this->xine = xine;
 
@@ -982,7 +993,7 @@ static const decoder_info_t spudec_info = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
 /* type, API, "name", version, special_info, init_function */
-  {PLUGIN_SPU_DECODER, 16, "spudvb", XINE_VERSION_CODE, &spudec_info,
+  {PLUGIN_SPU_DECODER, 17, "spudvb", XINE_VERSION_CODE, &spudec_info,
    &init_spu_decoder_plugin},
   {PLUGIN_NONE, 0, "", 0, NULL, NULL}
 };

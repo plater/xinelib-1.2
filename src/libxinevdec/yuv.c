@@ -104,10 +104,8 @@ static void yuv_decode_data (video_decoder_t *this_gen,
     this->progressive = buf->decoder_info[3];
     this->top_field_first = buf->decoder_info[4];
             
-    if (this->buf) {
-      free (this->buf);
-      this->buf = NULL;
-    }
+    free (this->buf);
+    this->buf = NULL;
 
     this->bufsize = VIDEOBUFSIZE;
     this->buf = malloc(this->bufsize);
@@ -304,10 +302,7 @@ static void yuv_discontinuity (video_decoder_t *this_gen) {
 static void yuv_dispose (video_decoder_t *this_gen) {
   yuv_decoder_t *this = (yuv_decoder_t *) this_gen;
 
-  if (this->buf) {
-    free (this->buf);
-    this->buf = NULL;
-  }
+  free (this->buf);
 
   if (this->decoder_ok) {
     this->decoder_ok = 0;
@@ -339,18 +334,6 @@ static video_decoder_t *open_plugin (video_decoder_class_t *class_gen, xine_stre
   return &this->video_decoder;
 }
 
-static char *get_identifier (video_decoder_class_t *this) {
-  return "YUV";
-}
-
-static char *get_description (video_decoder_class_t *this) {
-  return "Raw YUV video decoder plugin";
-}
-
-static void dispose_class (video_decoder_class_t *this) {
-  free (this);
-}
-
 static void *init_plugin (xine_t *xine, void *data) {
 
   yuv_class_t *this;
@@ -358,9 +341,9 @@ static void *init_plugin (xine_t *xine, void *data) {
   this = (yuv_class_t *) xine_xmalloc (sizeof (yuv_class_t));
 
   this->decoder_class.open_plugin     = open_plugin;
-  this->decoder_class.get_identifier  = get_identifier;
-  this->decoder_class.get_description = get_description;
-  this->decoder_class.dispose         = dispose_class;
+  this->decoder_class.identifier      = "YUV";
+  this->decoder_class.description     = N_("Raw YUV video decoder plugin");
+  this->decoder_class.dispose         = default_video_decoder_class_dispose;
 
   return this;
 }
@@ -385,6 +368,6 @@ static const decoder_info_t dec_info_video = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */  
-  { PLUGIN_VIDEO_DECODER, 18, "yuv", XINE_VERSION_CODE, &dec_info_video, init_plugin },
+  { PLUGIN_VIDEO_DECODER, 19, "yuv", XINE_VERSION_CODE, &dec_info_video, init_plugin },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };

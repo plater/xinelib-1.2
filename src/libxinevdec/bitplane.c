@@ -1158,8 +1158,8 @@ static void bitplane_decode_data (video_decoder_t *this_gen,
       this->bytes_per_pixel             = 1;
 
     /* New Buffer for indexes (palette based formats) */
-    this->index_buf                     = xine_xmalloc( this->num_pixel * this->bytes_per_pixel );
-    this->index_buf_hist                = xine_xmalloc( this->num_pixel * this->bytes_per_pixel );
+    this->index_buf                     = xine_xcalloc( this->num_pixel, this->bytes_per_pixel );
+    this->index_buf_hist                = xine_xcalloc( this->num_pixel, this->bytes_per_pixel );
 
     this->num_bitplanes                 = bih->biPlanes;
     this->camg_mode                     = bih->biCompression;
@@ -1186,8 +1186,7 @@ static void bitplane_decode_data (video_decoder_t *this_gen,
         this->ratio                    *= 2.0;
     }
 
-    if (this->buf)
-      free (this->buf);
+    free (this->buf);
     this->bufsize                       = VIDEOBUFSIZE;
     this->buf                           = xine_xmalloc(this->bufsize);
     this->size                          = 0;
@@ -1314,8 +1313,8 @@ static void bitplane_decode_data (video_decoder_t *this_gen,
           }
         }
         if( this->index_buf == NULL ) {
-          this->index_buf               = xine_xmalloc( (this->num_pixel * this->bytes_per_pixel) );
-          this->index_buf_hist          = xine_xmalloc( (this->num_pixel * this->bytes_per_pixel) );
+          this->index_buf               = xine_xcalloc( this->num_pixel, this->bytes_per_pixel );
+          this->index_buf_hist          = xine_xcalloc( this->num_pixel, this->bytes_per_pixel );
           for (i = 0; i < (this->num_pixel * this->bytes_per_pixel); i++) {
             this->index_buf[i]          = 0;
             this->index_buf_hist[i]     = 0;
@@ -1483,35 +1482,12 @@ static void bitplane_discontinuity (video_decoder_t *this_gen) {
 static void bitplane_dispose (video_decoder_t *this_gen) {
   bitplane_decoder_t *this              = (bitplane_decoder_t *) this_gen;
 
-  if (this->buf) {
-    free (this->buf);
-    this->buf = NULL;
-  }
-
-  if (this->buf_uk) {
-    free (this->buf_uk);
-    this->buf_uk = NULL;
-  }
-
-  if (this->buf_uk_hist) {
-    free (this->buf_uk_hist);
-    this->buf_uk_hist = NULL;
-  }
-
-  if (this->index_buf) {
-    free (this->index_buf);
-    this->index_buf = NULL;
-  }
-
-  if (this->index_buf_hist) {
-    free (this->index_buf_hist);
-    this->index_buf_hist = NULL;
-  }
-
-  if (this->index_buf) {
-    free (this->index_buf);
-    this->index_buf = NULL;
-  }
+  free (this->buf);
+  free (this->buf_uk);
+  free (this->buf_uk_hist);
+  free (this->index_buf);
+  free (this->index_buf_hist);
+  free (this->index_buf);
 
   if (this->decoder_ok) {
     this->decoder_ok                    = 0;
@@ -1544,26 +1520,14 @@ static video_decoder_t *open_plugin (video_decoder_class_t *class_gen, xine_stre
   return &this->video_decoder;
 }
 
-static char *get_identifier (video_decoder_class_t *this) {
-  return "bitplane";
-}
-
-static char *get_description (video_decoder_class_t *this) {
-  return "Raw bitplane video decoder plugin";
-}
-
-static void dispose_class (video_decoder_class_t *this) {
-  free (this);
-}
-
 static void *init_plugin (xine_t *xine, void *data) {
 
   bitplane_class_t *this                = (bitplane_class_t *) xine_xmalloc (sizeof (bitplane_class_t));
 
   this->decoder_class.open_plugin       = open_plugin;
-  this->decoder_class.get_identifier    = get_identifier;
-  this->decoder_class.get_description   = get_description;
-  this->decoder_class.dispose           = dispose_class;
+  this->decoder_class.identifier        = "bitplane";
+  this->decoder_class.description       = N_("Raw bitplane video decoder plugin");
+  this->decoder_class.dispose           = default_video_decoder_class_dispose;
 
   return this;
 }
@@ -1585,6 +1549,6 @@ static const decoder_info_t dec_info_video = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */
-  { PLUGIN_VIDEO_DECODER, 18, "bitplane", XINE_VERSION_CODE, &dec_info_video, init_plugin },
+  { PLUGIN_VIDEO_DECODER, 19, "bitplane", XINE_VERSION_CODE, &dec_info_video, init_plugin },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };

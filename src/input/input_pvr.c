@@ -98,7 +98,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <sys/ioctl.h>
-#include "videodev2.h"
+#include <linux/videodev2.h>
 
 #define XINE_ENABLE_EXPERIMENTAL_FEATURES
 
@@ -421,8 +421,9 @@ static uint32_t pvr_plugin_get_capabilities (input_plugin_t *this_gen) {
 }
 
 
-static off_t pvr_plugin_read (input_plugin_t *this_gen, char *buf, off_t len) {
+static off_t pvr_plugin_read (input_plugin_t *this_gen, void *buf_gen, off_t len) {
   /*pvr_input_plugin_t *this = (pvr_input_plugin_t *) this_gen;*/
+  char *buf = (char *)buf_gen;
 
   /* FIXME: Tricking the demux_mpeg_block plugin */
   buf[0] = 0;
@@ -510,10 +511,7 @@ static char *make_temp_name(pvr_input_plugin_t *this, int page) {
 
   char *filename;
   
-  int size = strlen(this->tmp_prefix)+PVR_FILENAME_SIZE;
-  filename = malloc(size);
-      
-  snprintf(filename, size, PVR_FILENAME, this->tmp_prefix, this->session, page);
+  asprintf(&filename, PVR_FILENAME, this->tmp_prefix, this->session, page);
   
   return filename;
 }
@@ -526,12 +524,9 @@ static char *make_base_save_name(int channel, time_t tm) {
   struct tm rec_time;
   char *filename;
   
-  int size = SAVE_BASE_FILENAME_SIZE;
-  filename = malloc(size);
-  
   localtime_r(&tm, &rec_time);
       
-  snprintf(filename, size, SAVE_BASE_FILENAME, 
+  asprintf(&filename, SAVE_BASE_FILENAME, 
            channel, rec_time.tm_mon+1, rec_time.tm_mday,
            rec_time.tm_year+1900, rec_time.tm_hour, rec_time.tm_min,
            rec_time.tm_sec);
@@ -545,10 +540,7 @@ static char *make_save_name(pvr_input_plugin_t *this, char *base, int page) {
 
   char *filename;
   
-  int size = strlen(this->save_prefix)+strlen(base)+SAVE_FILENAME_SIZE;
-  filename = malloc(size);
-      
-  snprintf(filename, size, SAVE_FILENAME, this->save_prefix, base, page);
+  asprintf(&filename, SAVE_FILENAME, this->save_prefix, base, page);
   
   return filename;
 }
@@ -1521,22 +1513,6 @@ static input_plugin_t *pvr_class_get_instance (input_class_t *cls_gen, xine_stre
 /*
  * plugin class functions
  */
-
-static const char *pvr_class_get_description (input_class_t *this_gen) {
-  return _("WinTV-PVR 250/350 input plugin");
-}
-
-static const char *pvr_class_get_identifier (input_class_t *this_gen) {
-  return "pvr";
-}
-
-
-static void pvr_class_dispose (input_class_t *this_gen) {
-  pvr_input_class_t  *this = (pvr_input_class_t *) this_gen;
-
-  free (this);
-}
-
 static void *init_plugin (xine_t *xine, void *data) {
 
   pvr_input_class_t  *this;
@@ -1555,11 +1531,11 @@ static void *init_plugin (xine_t *xine, void *data) {
 				    NULL);
 
   this->input_class.get_instance       = pvr_class_get_instance;
-  this->input_class.get_identifier     = pvr_class_get_identifier;
-  this->input_class.get_description    = pvr_class_get_description;
+  this->input_class.identifier         = "pvr";
+  this->input_class.description        = N_("WinTV-PVR 250/350 input plugin");
   this->input_class.get_dir            = NULL;
   this->input_class.get_autoplay_list  = NULL;
-  this->input_class.dispose            = pvr_class_dispose;
+  this->input_class.dispose            = default_input_class_dispose;
   this->input_class.eject_media        = NULL;
 
   return this;
@@ -1571,7 +1547,7 @@ static void *init_plugin (xine_t *xine, void *data) {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */  
-  { PLUGIN_INPUT | PLUGIN_MUST_PRELOAD, 17, "pvr", XINE_VERSION_CODE, NULL, init_plugin },
+  { PLUGIN_INPUT | PLUGIN_MUST_PRELOAD, 18, "pvr", XINE_VERSION_CODE, NULL, init_plugin },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };
 
