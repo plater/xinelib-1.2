@@ -19,7 +19,6 @@ libxineutils_la_SOURCES = $(pppc_files) \
 	cpu_accel.c \
 	color.c \
 	copy.c \
-	crc.c \
 	list.c \
 	memcpy.c \
 	monitor.c \
