@@ -49,10 +49,10 @@
 #define LOG
 */
 
-#include "xine_internal.h"
-#include "xineutils.h"
-#include "compat.h"
-#include "demux.h"
+#include <xine/xine_internal.h>
+#include <xine/xineutils.h>
+#include <xine/compat.h>
+#include <xine/demux.h>
 #include "bswap.h"
 
 #define FOURCC_TAG BE_FOURCC
@@ -232,7 +232,7 @@ static void real_parse_index(demux_real_t *this) {
 
       if(index && entries) {
         /* Allocate memory for index */
-        *index = xine_xmalloc(entries * sizeof(real_index_entry_t));
+        *index = xine_xcalloc(entries, sizeof(real_index_entry_t));
         
         /* Read index */
         for(i = 0; i < entries; i++) {
@@ -275,19 +275,13 @@ static mdpr_t *real_parse_mdpr(const char *data) {
   mdpr->duration=_X_BE_32(&data[28]);
 
   mdpr->stream_name_size=data[32];
-  mdpr->stream_name=malloc(sizeof(char)*(mdpr->stream_name_size+1));
-  memcpy(mdpr->stream_name, &data[33], mdpr->stream_name_size);
-  mdpr->stream_name[(int)mdpr->stream_name_size]=0;
+  mdpr->stream_name=xine_memdup0(&data[33], mdpr->stream_name_size);
 
   mdpr->mime_type_size=data[33+mdpr->stream_name_size];
-  mdpr->mime_type=malloc(sizeof(char)*(mdpr->mime_type_size+1));
-  memcpy(mdpr->mime_type, &data[34+mdpr->stream_name_size], mdpr->mime_type_size);
-  mdpr->mime_type[(int)mdpr->mime_type_size]=0;
+  mdpr->mime_type=xine_memdup0(&data[34+mdpr->stream_name_size], mdpr->mime_type_size);
 
   mdpr->type_specific_len=_X_BE_32(&data[34+mdpr->stream_name_size+mdpr->mime_type_size]);
-  mdpr->type_specific_data=malloc(sizeof(char)*(mdpr->type_specific_len));
-  memcpy(mdpr->type_specific_data,
-      &data[38+mdpr->stream_name_size+mdpr->mime_type_size], mdpr->type_specific_len);
+  mdpr->type_specific_data=xine_memdup(&data[38+mdpr->stream_name_size+mdpr->mime_type_size], mdpr->type_specific_len);
 
   lprintf("MDPR: stream number: %i\n", mdpr->stream_number);
   lprintf("MDPR: maximal bit rate: %i\n", mdpr->max_bit_rate);
@@ -690,7 +684,7 @@ unknown:
                          this->video_stream->mdpr->avg_bit_rate);
                          
     /* Allocate fragment offset table */
-    this->fragment_tab = xine_xmalloc(FRAGMENT_TAB_SIZE*sizeof(uint32_t));
+    this->fragment_tab = xine_xcalloc(FRAGMENT_TAB_SIZE, sizeof(uint32_t));
     this->fragment_tab_max = FRAGMENT_TAB_SIZE;
   }
 
@@ -1280,7 +1274,7 @@ static int demux_real_send_chunk(demux_plugin_t *this_gen) {
       frames = (stream_read_word(this) & 0xf0) >> 4;
       
       /* 2 bytes per frame size */
-      sizes = xine_xmalloc(frames*sizeof(int));
+      sizes = xine_xcalloc(frames, sizeof(int));
       for(i = 0; i < frames; i++)
         sizes[i] = stream_read_word(this);
         
@@ -1480,18 +1474,15 @@ static void demux_real_dispose (demux_plugin_t *this_gen) {
 
   for(i = 0; i < this->num_video_streams; i++) {
     real_free_mdpr(this->video_streams[i].mdpr);
-    if(this->video_streams[i].index)
-      free(this->video_streams[i].index);
+    free(this->video_streams[i].index);
   }
   
   for(i = 0; i < this->num_audio_streams; i++) {
     real_free_mdpr(this->audio_streams[i].mdpr);
-    if(this->audio_streams[i].index)
-      free(this->audio_streams[i].index);
+    free(this->audio_streams[i].index);
   }
   
-  if(this->fragment_tab)
-    free(this->fragment_tab);
+  free(this->fragment_tab);
   
   free(this);
 }
@@ -1563,22 +1554,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
   lprintf ("by content accepted.\n");
   break;
 
-  case METHOD_BY_EXTENSION: {
-    const char *extensions, *mrl;
-
-    mrl = input->get_mrl (input);
-    extensions = class_gen->get_extensions (class_gen);
-
-    lprintf ("by extension '%s'\n", mrl);
-
-    if (!_x_demux_check_extension (mrl, extensions)) {
-      return NULL;
-    }
-    lprintf ("by extension accepted.\n");
-  }
-
-  break;
-
+  case METHOD_BY_MRL:
   case METHOD_EXPLICIT:
     break;
 
@@ -1617,42 +1593,21 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
   return &this->demux_plugin;
 }
 
-static const char *get_description (demux_class_t *this_gen) {
-  return "RealMedia file demux plugin";
-}
-
-static const char *get_identifier (demux_class_t *this_gen) {
-  return "Real";
-}
-
-static const char *get_extensions (demux_class_t *this_gen) {
-  return "rm rmvb ram";
-}
-
-static const char *get_mimetypes (demux_class_t *this_gen) {
-  return "audio/x-pn-realaudio: ra, rm, ram: Real Media file;"
-         "audio/x-pn-realaudio-plugin: rpm: Real Media plugin file;"
-         "audio/x-real-audio: ra, rm, ram: Real Media file;"
-         "application/vnd.rn-realmedia: ra, rm, ram: Real Media file;"; 
-}
-
-static void class_dispose (demux_class_t *this_gen) {
-  demux_real_class_t *this = (demux_real_class_t *) this_gen;
-
-  free (this);
-}
-
 static void *init_class (xine_t *xine, void *data) {
   demux_real_class_t     *this;
 
   this = xine_xmalloc (sizeof (demux_real_class_t));
 
   this->demux_class.open_plugin     = open_plugin;
-  this->demux_class.get_description = get_description;
-  this->demux_class.get_identifier  = get_identifier;
-  this->demux_class.get_mimetypes   = get_mimetypes;
-  this->demux_class.get_extensions  = get_extensions;
-  this->demux_class.dispose         = class_dispose;
+  this->demux_class.description     = N_("RealMedia file demux plugin");
+  this->demux_class.identifier      = "Real";
+  this->demux_class.mimetypes       =
+    "audio/x-pn-realaudio: ra, rm, ram: Real Media file;"
+    "audio/x-pn-realaudio-plugin: rpm: Real Media plugin file;"
+    "audio/x-real-audio: ra, rm, ram: Real Media file;"
+    "application/vnd.rn-realmedia: ra, rm, ram: Real Media file;"; 
+  this->demux_class.extensions      = "rm rmvb ram";
+  this->demux_class.dispose         = default_demux_class_dispose;
 
   return this;
 }
@@ -1666,6 +1621,6 @@ static const demuxer_info_t demux_info_real = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */
-  { PLUGIN_DEMUX, 26, "real", XINE_VERSION_CODE, &demux_info_real, init_class },
+  { PLUGIN_DEMUX, 27, "real", XINE_VERSION_CODE, &demux_info_real, init_class },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };
