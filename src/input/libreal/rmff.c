@@ -27,7 +27,7 @@
 #define LOG
 */
 
-#include "xineutils.h"
+#include <xine/xineutils.h>
 #include "bswap.h"
 #include "rmff.h"
 
@@ -35,7 +35,7 @@
  * writes header data to a buffer
  */
 
-static void rmff_dump_fileheader(rmff_fileheader_t *fileheader, char *buffer) {
+static void rmff_dump_fileheader(rmff_fileheader_t *fileheader, uint8_t *buffer) {
 
   if (!fileheader) return;
   fileheader->object_id=_X_BE_32(&fileheader->object_id);
@@ -55,7 +55,7 @@ static void rmff_dump_fileheader(rmff_fileheader_t *fileheader, char *buffer) {
   fileheader->object_id=_X_BE_32(&fileheader->object_id);
 }
 
-static void rmff_dump_prop(rmff_prop_t *prop, char *buffer) {
+static void rmff_dump_prop(rmff_prop_t *prop, uint8_t *buffer) {
 
   if (!prop) return;
   prop->object_id=_X_BE_32(&prop->object_id);
@@ -95,7 +95,7 @@ static void rmff_dump_prop(rmff_prop_t *prop, char *buffer) {
   prop->object_id=_X_BE_32(&prop->object_id);
 }
 
-static void rmff_dump_mdpr(rmff_mdpr_t *mdpr, char *buffer) {
+static void rmff_dump_mdpr(rmff_mdpr_t *mdpr, uint8_t *buffer) {
 
   int s1, s2, s3;
 
@@ -143,7 +143,7 @@ static void rmff_dump_mdpr(rmff_mdpr_t *mdpr, char *buffer) {
 
 }
 
-static void rmff_dump_cont(rmff_cont_t *cont, char *buffer) {
+static void rmff_dump_cont(rmff_cont_t *cont, uint8_t *buffer) {
 
   int p;
 
@@ -183,7 +183,7 @@ static void rmff_dump_cont(rmff_cont_t *cont, char *buffer) {
   cont->object_id=_X_BE_32(&cont->object_id);
 }
 
-static void rmff_dump_dataheader(rmff_data_t *data, char *buffer) {
+static void rmff_dump_dataheader(rmff_data_t *data, uint8_t *buffer) {
 
   if (!data) return;
   data->object_id=_X_BE_32(&data->object_id);
@@ -203,7 +203,8 @@ static void rmff_dump_dataheader(rmff_data_t *data, char *buffer) {
   data->object_id=_X_BE_32(&data->object_id);
 }
 
-int rmff_dump_header(rmff_header_t *h, char *buffer, int max) {
+int rmff_dump_header(rmff_header_t *h, void *buf_gen, int max) {
+  uint8_t *buffer = buf_gen;
 
   int written=0;
   rmff_mdpr_t **stream=h->streams;
@@ -230,7 +231,7 @@ int rmff_dump_header(rmff_header_t *h, char *buffer, int max) {
   return written;
 }
 
-void rmff_dump_pheader(rmff_pheader_t *h, char *data) {
+void rmff_dump_pheader(rmff_pheader_t *h, uint8_t *data) {
 
   data[0]=(h->object_version>>8) & 0xff;
   data[1]=h->object_version & 0xff;
@@ -310,19 +311,13 @@ static rmff_mdpr_t *rmff_scan_mdpr(const char *data) {
   mdpr->duration=_X_BE_32(&data[36]);
   
   mdpr->stream_name_size=data[40];
-  mdpr->stream_name = malloc(sizeof(char)*(mdpr->stream_name_size+1));
-  memcpy(mdpr->stream_name, &data[41], mdpr->stream_name_size);
-  mdpr->stream_name[mdpr->stream_name_size]=0;
+  mdpr->stream_name = xine_memdup0(&data[41], mdpr->stream_name_size);
   
   mdpr->mime_type_size=data[41+mdpr->stream_name_size];
-  mdpr->mime_type = malloc(sizeof(char)*(mdpr->mime_type_size+1));
-  memcpy(mdpr->mime_type, &data[42+mdpr->stream_name_size], mdpr->mime_type_size);
-  mdpr->mime_type[mdpr->mime_type_size]=0;
+  mdpr->mime_type = xine_memdup0(&data[42+mdpr->stream_name_size], mdpr->mime_type_size);
   
   mdpr->type_specific_len=_X_BE_32(&data[42+mdpr->stream_name_size+mdpr->mime_type_size]);
-  mdpr->type_specific_data = malloc(sizeof(char)*(mdpr->type_specific_len));
-  memcpy(mdpr->type_specific_data, 
-      &data[46+mdpr->stream_name_size+mdpr->mime_type_size], mdpr->type_specific_len);
+  mdpr->type_specific_data = xine_memdup(&data[46+mdpr->stream_name_size+mdpr->mime_type_size], mdpr->type_specific_len);
   
   return mdpr;
 }
@@ -340,24 +335,17 @@ static rmff_cont_t *rmff_scan_cont(const char *data) {
     lprintf("warning: unknown object version in CONT: 0x%04x\n", cont->object_version);
   }
   cont->title_len=_X_BE_16(&data[10]);
-  cont->title = malloc(sizeof(char)*(cont->title_len+1));
-  memcpy(cont->title, &data[12], cont->title_len);
-  cont->title[cont->title_len]=0;
+  cont->title = xine_memdup0(&data[12], cont->title_len);
   pos=cont->title_len+12;
   cont->author_len=_X_BE_16(&data[pos]);
-  cont->author = malloc(sizeof(char)*(cont->author_len+1));
-  memcpy(cont->author, &data[pos+2], cont->author_len);
-  cont->author[cont->author_len]=0;
+  cont->author = xine_memdup0(&data[pos+2], cont->author_len);
   pos=pos+2+cont->author_len;
   cont->copyright_len=_X_BE_16(&data[pos]);
-  cont->copyright = malloc(sizeof(char)*(cont->copyright_len+1));
-  memcpy(cont->copyright, &data[pos+2], cont->copyright_len);
+  cont->copyright = xine_memdup0(&data[pos+2], cont->copyright_len);
   cont->copyright[cont->copyright_len]=0;
   pos=pos+2+cont->copyright_len;
   cont->comment_len=_X_BE_16(&data[pos]);
-  cont->comment = malloc(sizeof(char)*(cont->comment_len+1));
-  memcpy(cont->comment, &data[pos+2], cont->comment_len);
-  cont->comment[cont->comment_len]=0;
+  cont->comment = xine_memdup0(&data[pos+2], cont->comment_len);
 
   return cont;
 }
@@ -403,10 +391,7 @@ rmff_header_t *rmff_scan_header(const char *data) {
   header->fileheader=rmff_scan_fileheader(ptr);
   ptr += header->fileheader->size;
 	
-  header->streams = malloc(sizeof(rmff_mdpr_t*)*(header->fileheader->num_headers));
-  for (i=0; i<header->fileheader->num_headers; i++) {
-    header->streams[i]=NULL;
-  }
+  header->streams = calloc(header->fileheader->num_headers, sizeof(rmff_mdpr_t*));
   
   for (i=1; i<header->fileheader->num_headers; i++) {
     chunk_type = _X_BE_32(ptr);
@@ -586,8 +571,7 @@ rmff_mdpr_t *rmff_new_mdpr(
     mdpr->mime_type_size=strlen(mime_type);
   }
   mdpr->type_specific_len=type_specific_len;
-  mdpr->type_specific_data = malloc(sizeof(char)*type_specific_len);
-  memcpy(mdpr->type_specific_data,type_specific_data,type_specific_len);
+  mdpr->type_specific_data = xine_memdup(type_specific_data,type_specific_len);
   mdpr->mlti_data=NULL;
   
   mdpr->size=mdpr->stream_name_size+mdpr->mime_type_size+mdpr->type_specific_len+46;

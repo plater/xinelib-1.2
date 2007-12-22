@@ -29,7 +29,7 @@
 #include "rmff.h"
 #include "rtsp.h"
 #include "sdpplin.h"
-#include "xineutils.h"
+#include <xine/xineutils.h>
 
 /*
  * Decodes base64 strings (based upon b64 package)
@@ -199,8 +199,7 @@ static sdpplin_stream_t *sdpplin_parse_stream(char **data) {
     if(filter(*data,"a=OpaqueData:buffer;",&buf)) {
       decoded = b64_decode(buf, decoded, &(desc->mlti_data_size));
       if ( decoded != NULL ) {
-	desc->mlti_data = malloc(sizeof(char)*desc->mlti_data_size);
-	memcpy(desc->mlti_data, decoded, desc->mlti_data_size);
+	desc->mlti_data = xine_memdup(decoded, desc->mlti_data_size);
 	handled=1;
 	*data=nl(*data);
 	lprintf("mlti_data_size: %i\n", desc->mlti_data_size);
@@ -294,7 +293,7 @@ sdpplin_t *sdpplin_parse(char *data) {
     
     if(filter(data,"a=StreamCount:integer;",&buf)) {
       desc->stream_count=atoi(buf);
-      desc->stream = malloc(sizeof(sdpplin_stream_t*)*desc->stream_count);
+      desc->stream = calloc(desc->stream_count, sizeof(sdpplin_stream_t*));
       handled=1;
       data=nl(data);
     }

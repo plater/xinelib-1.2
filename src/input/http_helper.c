@@ -26,7 +26,7 @@
 
 #include <string.h>
 
-#include "xine_internal.h"
+#include <xine/xine_internal.h>
 #include "http_helper.h"
 
 int _x_parse_url (char *url, char **proto, char** host, int *port,
@@ -240,8 +240,7 @@ char *_x_canonicalise_url (const char *base, const char *url) {
       ++cut;
   }
   base_length = cut ? (size_t)(cut - base) : strlen (base);
-  ret = malloc (base_length + strlen (url) + 1);
-  sprintf (ret, "%.*s%s", (int)base_length, base, url);
+  asprintf (&ret, "%.*s%s", (int)base_length, base, url);
   return ret;
 }
 
