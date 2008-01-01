@@ -57,9 +57,9 @@
 #include <dlfcn.h>
 #include <pthread.h>
 
-#include "xine_internal.h"
-#include "buffer.h"
-#include "xineutils.h"
+#include <xine/xine_internal.h>
+#include <xine/buffer.h>
+#include <xine/xineutils.h>
 
 #define QLEN 5    /* maximum connection queue length */
 #define _BUFSIZ 512
@@ -108,9 +108,10 @@ static int sock_check_opened(int socket) {
 /*
  * Write to socket.
  */
-static int sock_data_write(xine_t *xine, int socket, char *buf, int len) {
+static int sock_data_write(xine_t *xine, int socket, void *buf_gen, int len) {
   ssize_t  size;
   int      wlen = 0;
+  uint8_t *buf = buf_gen;
   
   if((socket < 0) || (buf == NULL))
     return -1;
@@ -154,7 +155,7 @@ sock_string_write(xine_t *xine, int socket, char *msg, ...) {
  * this is the most important broadcaster function. 
  * it sends data to every connected client (slaves).
  */
-static void broadcaster_data_write(broadcaster_t *this, char *buf, int len) {
+static void broadcaster_data_write(broadcaster_t *this, void *buf, int len) {
   xine_list_iterator_t ite;
 
   ite = xine_list_front (this->connections);

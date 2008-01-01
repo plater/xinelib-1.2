@@ -39,10 +39,10 @@
 #define LOG_VERBOSE
 
 #include "xine.h"
-#include "xine_internal.h"
-#include "video_out.h"
-#include "xineutils.h"
-#include "vo_scale.h"
+#include <xine/xine_internal.h>
+#include <xine/video_out.h>
+#include <xine/xineutils.h>
+#include <xine/vo_scale.h>
 
 #ifdef DIRECTFB_X11
 # include "x11osd.h"
@@ -155,7 +155,7 @@ typedef struct {
 #define DEFAULT_COLORKEY  0x202040
 
 #define DIRECTFB_OPTIONS  "no-banner,"\
-                          "bg-color=00000000,"\
+                          "bg-colour=00000000,"\
                           "no-vt-switch,"\
                           "no-vt-switching,"\
                           "no-sighandler,"\
@@ -504,7 +504,7 @@ static void directfb_subpicture_paint (directfb_driver_t *this,
             colors[index].a = alpha | (alpha << 4);
           }
             
-          lprintf ("color change to %02x%02x%02x%02x.\n",
+          lprintf ("colour change to %02x%02x%02x%02x.\n",
                    colors[index].a, colors[index].r,
                    colors[index].g, colors[index].b);
           this->spic_surface->SetColor (this->spic_surface,
@@ -1333,8 +1333,8 @@ static void update_config_cb (void *data, xine_cfg_entry_t *entry) {
    
 static void init_config (directfb_driver_t *this) {
   config_values_t   *config             = this->xine->config;
-  static const char *buffermode_enum[]  = {"single", "double", "triple", 0};
-  static const char *fieldparity_enum[] = {"none", "top", "bottom", 0};
+  static const char *const buffermode_enum[]  = {"single", "double", "triple", 0};
+  static const char *const fieldparity_enum[] = {"none", "top", "bottom", 0};
   
   this->buffermode = config->register_enum (config,
       "video.device.directfb_buffermode", this->buffermode, (char**)buffermode_enum,
@@ -1880,19 +1880,6 @@ static vo_driver_t *open_plugin_fb (video_driver_class_t *class_gen, const void 
   return &this->vo_driver;
 }
 
-static char* get_identifier_fb (video_driver_class_t *this_gen) {
-  return "DirectFB";
-}
-
-static char* get_description_fb (video_driver_class_t *this_gen) {
-  return _("xine video output plugin using DirectFB.");
-}
-
-static void dispose_class_fb (video_driver_class_t *this_gen) {
-  directfb_class_t *this = (directfb_class_t *) this_gen;
-  free (this);
-}
-
 #ifndef DIRECTFB_X11
 static void *init_class_fb (xine_t *xine, void *visual_gen) {
   directfb_class_t *this;
@@ -1910,9 +1897,9 @@ static void *init_class_fb (xine_t *xine, void *visual_gen) {
 
   this = (directfb_class_t *) xine_xmalloc (sizeof (directfb_class_t));
   this->driver_class.open_plugin     = open_plugin_fb;
-  this->driver_class.get_identifier  = get_identifier_fb;
-  this->driver_class.get_description = get_description_fb;
-  this->driver_class.dispose         = dispose_class_fb;
+  this->driver_class.identifier      = "DirectFB";
+  this->driver_class.description     = N_("xine video output plugin using DirectFB.");
+  this->driver_class.dispose         = default_video_driver_class_dispose;
 
   this->xine = xine;
 
@@ -2088,20 +2075,6 @@ static vo_driver_t *open_plugin_x11 (video_driver_class_t *class_gen, const void
   return &this->vo_driver;
 }
 
-static char* get_identifier_x11 (video_driver_class_t *this_gen) {
-  return "XDirectFB";
-}
-
-static char* get_description_x11 (video_driver_class_t *this_gen) {
-  return _("xine video output plugin using DirectFB under XDirectFB.");
-}
-
-static void dispose_class_x11 (video_driver_class_t *this_gen) {
-  directfb_class_t *this = (directfb_class_t *) this_gen;
-
-  free (this);
-}
-
 static void *init_class_x11 (xine_t *xine, void *visual_gen) {
   directfb_class_t *this;
   x11_visual_t     *visual = (x11_visual_t *) visual_gen;
@@ -2129,9 +2102,9 @@ static void *init_class_x11 (xine_t *xine, void *visual_gen) {
 
   this = (directfb_class_t *) xine_xmalloc (sizeof (directfb_class_t));
   this->driver_class.open_plugin     = open_plugin_x11;
-  this->driver_class.get_identifier  = get_identifier_x11;
-  this->driver_class.get_description = get_description_x11;
-  this->driver_class.dispose         = dispose_class_x11;
+  this->driver_class.identifier      = "XDirectFB";
+  this->driver_class.description     = N_("xine video output plugin using DirectFB under XDirectFB.");
+  this->driver_class.dispose         = default_video_driver_class_dispose;
 
   this->visual_type = XINE_VISUAL_TYPE_X11;
   this->xine        = xine;
