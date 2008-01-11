@@ -20,8 +20,6 @@
  * OSD stuff (text and graphic primitives)
  */
 
-#define __OSD_C__
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -40,6 +38,8 @@
 #  include <iconv.h>
 #endif
 
+#include <basedir.h>
+
 #define LOG_MODULE "osd"
 #define LOG_VERBOSE
 /*
@@ -48,11 +48,11 @@
 
 #define XINE_ENGINE_INTERNAL
 
-#include "xine_internal.h"
+#include <xine/xine_internal.h>
 #include "xine-engine/bswap.h"
-#include "xineutils.h"
-#include "video_out.h"
-#include "osd.h"
+#include <xine/xineutils.h>
+#include <xine/video_out.h>
+#include <xine/osd.h>
 
 #ifdef HAVE_FT2
 #include <ft2build.h>
@@ -107,6 +107,100 @@
 #else
 #  define FT_LOAD_FLAGS  (FT_LOAD_DEFAULT | FT_LOAD_NO_HINTING)
 #endif
+
+/* This text descriptions are used for config screen */
+static const char *const textpalettes_str[NUMBER_OF_TEXT_PALETTES+1] = {
+  "white-black-transparent",
+  "white-none-transparent",
+  "white-none-translucid",
+  "yellow-black-transparent",    
+  NULL};
+
+/* 
+   Palette entries as used by osd fonts:
+
+   0: not used by font, always transparent
+   1: font background, usually transparent, may be used to implement
+      translucid boxes where the font will be printed.
+   2-5: transition between background and border (usually only alpha
+        value changes).
+   6: font border. if the font is to be displayed without border this
+      will probably be adjusted to font background or near.
+   7-9: transition between border and foreground
+   10: font color (foreground)   
+*/
+
+/* 
+    The palettes below were made by hand, ie, i just throw
+    values that seemed to do the transitions i wanted.
+    This can surelly be improved a lot. [Miguel]
+*/
+
+static const clut_t textpalettes_color[NUMBER_OF_TEXT_PALETTES][TEXT_PALETTE_SIZE] = {
+/* white, black border, transparent */
+  {
+    CLUT_Y_CR_CB_INIT(0x00, 0x00, 0x00), /*0*/
+    CLUT_Y_CR_CB_INIT(0x00, 0x80, 0x80), /*1*/
+    CLUT_Y_CR_CB_INIT(0x00, 0x80, 0x80), /*2*/
+    CLUT_Y_CR_CB_INIT(0x00, 0x80, 0x80), /*3*/
+    CLUT_Y_CR_CB_INIT(0x00, 0x80, 0x80), /*4*/
+    CLUT_Y_CR_CB_INIT(0x00, 0x80, 0x80), /*5*/
+    CLUT_Y_CR_CB_INIT(0x00, 0x80, 0x80), /*6*/
+    CLUT_Y_CR_CB_INIT(0x40, 0x80, 0x80), /*7*/
+    CLUT_Y_CR_CB_INIT(0x80, 0x80, 0x80), /*8*/
+    CLUT_Y_CR_CB_INIT(0xc0, 0x80, 0x80), /*9*/
+    CLUT_Y_CR_CB_INIT(0xff, 0x80, 0x80), /*10*/
+  },
+  /* white, no border, transparent */
+  {
+    CLUT_Y_CR_CB_INIT(0x00, 0x00, 0x00), /*0*/
+    CLUT_Y_CR_CB_INIT(0xff, 0x80, 0x80), /*1*/
+    CLUT_Y_CR_CB_INIT(0xff, 0x80, 0x80), /*2*/
+    CLUT_Y_CR_CB_INIT(0xff, 0x80, 0x80), /*3*/
+    CLUT_Y_CR_CB_INIT(0xff, 0x80, 0x80), /*4*/
+    CLUT_Y_CR_CB_INIT(0xff, 0x80, 0x80), /*5*/
+    CLUT_Y_CR_CB_INIT(0xff, 0x80, 0x80), /*6*/
+    CLUT_Y_CR_CB_INIT(0xff, 0x80, 0x80), /*7*/
+    CLUT_Y_CR_CB_INIT(0xff, 0x80, 0x80), /*8*/
+    CLUT_Y_CR_CB_INIT(0xff, 0x80, 0x80), /*9*/
+    CLUT_Y_CR_CB_INIT(0xff, 0x80, 0x80), /*10*/
+  },
+  /* white, no border, translucid */
+  {
+    CLUT_Y_CR_CB_INIT(0x00, 0x00, 0x00), /*0*/
+    CLUT_Y_CR_CB_INIT(0x80, 0x80, 0x80), /*1*/
+    CLUT_Y_CR_CB_INIT(0x80, 0x80, 0x80), /*2*/
+    CLUT_Y_CR_CB_INIT(0x80, 0x80, 0x80), /*3*/
+    CLUT_Y_CR_CB_INIT(0x80, 0x80, 0x80), /*4*/
+    CLUT_Y_CR_CB_INIT(0x80, 0x80, 0x80), /*5*/
+    CLUT_Y_CR_CB_INIT(0x80, 0x80, 0x80), /*6*/
+    CLUT_Y_CR_CB_INIT(0xa0, 0x80, 0x80), /*7*/
+    CLUT_Y_CR_CB_INIT(0xc0, 0x80, 0x80), /*8*/
+    CLUT_Y_CR_CB_INIT(0xe0, 0x80, 0x80), /*9*/
+    CLUT_Y_CR_CB_INIT(0xff, 0x80, 0x80), /*10*/
+  },
+  /* yellow, black border, transparent */
+  {
+    CLUT_Y_CR_CB_INIT(0x00, 0x00, 0x00), /*0*/
+    CLUT_Y_CR_CB_INIT(0x00, 0x80, 0x80), /*1*/
+    CLUT_Y_CR_CB_INIT(0x00, 0x80, 0x80), /*2*/
+    CLUT_Y_CR_CB_INIT(0x00, 0x80, 0x80), /*3*/
+    CLUT_Y_CR_CB_INIT(0x00, 0x80, 0x80), /*4*/
+    CLUT_Y_CR_CB_INIT(0x00, 0x80, 0x80), /*5*/
+    CLUT_Y_CR_CB_INIT(0x00, 0x80, 0x80), /*6*/
+    CLUT_Y_CR_CB_INIT(0x40, 0x84, 0x60), /*7*/
+    CLUT_Y_CR_CB_INIT(0x70, 0x88, 0x40), /*8*/
+    CLUT_Y_CR_CB_INIT(0xb0, 0x8a, 0x20), /*9*/
+    CLUT_Y_CR_CB_INIT(0xff, 0x90, 0x00), /*10*/
+  },
+};
+
+static const uint8_t textpalettes_trans[NUMBER_OF_TEXT_PALETTES][TEXT_PALETTE_SIZE] = {
+  {0, 0, 3, 6, 8, 10, 12, 14, 15, 15, 15 },
+  {0, 0, 0, 0, 0, 0, 2, 6, 9, 12, 15 },
+  {0, 8, 9, 10, 11, 12, 13, 14, 15, 15, 15 },
+  {0, 0, 3, 6, 8, 10, 12, 14, 15, 15, 15 },
+};
 
 typedef struct osd_fontchar_s {
   uint8_t *bmp;
@@ -816,6 +910,93 @@ static int osd_renderer_unload_font(osd_renderer_t *this, char *fontname ) {
 }
 
 #ifdef HAVE_FT2
+
+# ifdef HAVE_FONTCONFIG
+/**
+ * @brief Look up a font name using FontConfig library
+ * @param osd The OSD object to load the font for.
+ * @param fontname Name of the font to look up.
+ * @param size Size of the font to look for.
+ *
+ * @return If the lookup was done correctly, a non-zero value is returned.
+ */
+static int osd_lookup_fontconfig( osd_object_t *osd, const char *const fontname, const int size ) {
+  FcPattern *pat = NULL, *match = NULL;
+  FcFontSet *fs = FcFontSetCreate();
+  FcResult result;
+
+  pat = FcPatternBuild(NULL, FC_FAMILY, FcTypeString, fontname, FC_SIZE, FcTypeDouble, (double)size, NULL);
+  FcConfigSubstitute(NULL, pat, FcMatchPattern);
+  FcDefaultSubstitute(pat);
+
+  match = FcFontMatch(NULL, pat, &result);
+  FcPatternDestroy(pat);
+    
+  if ( ! match ) {
+    FcFontSetDestroy(fs);
+    xprintf(osd->renderer->stream->xine, XINE_VERBOSITY_LOG,
+	    _("osd: error matching font %s with FontConfig"), fontname);
+    return 0;
+  }
+  FcFontSetAdd(fs, match);
+
+  if ( fs->nfont != 0 ) {
+    FcChar8 *filename = NULL;
+    FcPatternGetString(fs->fonts[0], FC_FILE, 0, &filename);
+    if ( ! FT_New_Face(osd->ft2->library, (const char*)filename, 0, &osd->ft2->face) ) {
+      FcFontSetDestroy(fs);
+      return 1;
+    }
+
+    xprintf(osd->renderer->stream->xine, XINE_VERBOSITY_LOG,
+	    _("osd: error loading font %s with FontConfig"), fontname);
+    return 0;
+  } else {
+    xprintf(osd->renderer->stream->xine, XINE_VERBOSITY_LOG,
+	    _("osd: error looking up font %s with FontConfig"), fontname);
+    return 0;
+  }
+}
+# endif /* HAVE_FONTCONFIG */
+
+/**
+ * @brief Look up a font file using XDG data directories.
+ * @param osd The OSD object to load the font for.
+ * @param fontname Name (absolute or relative) of the font to look up.
+ *
+ * @return If the lookup was done correctly, a non-zero value is returned.
+ *
+ * @see XDG Base Directory specification:
+ *      http://standards.freedesktop.org/basedir-spec/latest/index.html
+ */
+static int osd_lookup_xdg( osd_object_t *osd, const char *const fontname ) {
+  const char *const *data_dirs = xdgSearchableDataDirectories(osd->renderer->stream->xine->basedir_handle);
+
+  /* try load font from current directory or from an absolute path */
+  if ( FT_New_Face(osd->ft2->library, fontname, 0, &osd->ft2->face) == FT_Err_Ok )
+    return 1;
+
+  if ( data_dirs )
+    while( (*data_dirs) && *(*data_dirs) ) {
+      FT_Error fte = FT_Err_Ok;
+      char *fontpath = NULL;
+      asprintf(&fontpath, "%s/"PACKAGE"/fonts/%s", *data_dirs, fontname);
+
+      fte = FT_New_Face(osd->ft2->library, fontpath, 0, &osd->ft2->face);
+
+      free(fontpath);
+
+      if ( fte == FT_Err_Ok )
+	return 1;
+
+      data_dirs++;
+    }
+
+  xprintf(osd->renderer->stream->xine, XINE_VERBOSITY_LOG, 
+	  _("osd: error loading font %s with in XDG data directories.\n"), fontname);
+  return 0;
+}
+
 static int osd_set_font_freetype2( osd_object_t *osd, const char *fontname, int size ) {
   if (!osd->ft2) {
     osd->ft2 = xine_xmalloc(sizeof(osd_ft2context_t));
@@ -828,68 +1009,19 @@ static int osd_set_font_freetype2( osd_object_t *osd, const char *fontname, int 
     }
   }
    
+  do { /* while 0 */
 #ifdef HAVE_FONTCONFIG
-  do {
-    FcPattern *pat = NULL, *match = NULL;
-    FcFontSet *fs = FcFontSetCreate();
-    FcResult result;
-
-    pat = FcPatternBuild(NULL, FC_FAMILY, FcTypeString, fontname, FC_SIZE, FcTypeDouble, (double)size, NULL);
-    FcConfigSubstitute(NULL, pat, FcMatchPattern);
-    FcDefaultSubstitute(pat);
-
-    match = FcFontMatch(NULL, pat, &result);
-    FcPatternDestroy(pat);
-    
-    if ( ! match ) {
-      FcFontSetDestroy(fs);
-      xprintf(osd->renderer->stream->xine, XINE_VERBOSITY_LOG,
-	      _("osd: error matching font %s with FontConfig"), fontname);
+    if ( osd_lookup_fontconfig(osd, fontname, size) )
       break;
-    }
-    FcFontSetAdd(fs, match);
-
-    if ( fs->nfont != 0 ) {
-      FcChar8 *filename = NULL;
-      FcPatternGetString(fs->fonts[0], FC_FILE, 0, &filename);
-      if ( ! FT_New_Face(osd->ft2->library, (const char*)filename, 0, &osd->ft2->face) ) {
-	FcFontSetDestroy(fs);
-	goto end;
-      }
-
-      xprintf(osd->renderer->stream->xine, XINE_VERBOSITY_LOG,
-	      _("osd: error loading font %s with FontConfig"), fontname);
-    } else {
-      xprintf(osd->renderer->stream->xine, XINE_VERBOSITY_LOG,
-	      _("osd: error looking up font %s with FontConfig"), fontname);
-    }
-  } while(0);
 #endif
-  {
-    char pathname[1024];
-    /* try load font from current directory */
-    if ( !FT_New_Face(osd->ft2->library, fontname, 0, &osd->ft2->face) )
-      goto end;
-    
-    /* try load font from home directory */
-    snprintf(pathname, 1024, "%s/.xine/fonts/%s", xine_get_homedir(), fontname);
-    if ( !FT_New_Face(osd->ft2->library, pathname, 0, &osd->ft2->face) )
-      goto end;
+    if ( osd_lookup_xdg(osd, fontname) )
+      break;
 
-    /* try load font from xine font directory */
-    snprintf(pathname, 1024, "%s/%s", XINE_FONTDIR, fontname);
-    if ( !FT_New_Face(osd->ft2->library, pathname, 0, &osd->ft2->face) )
-      goto end;
+    free(osd->ft2);
+    osd->ft2 = NULL;
+    return 0;
+  } while(0);
 
-    xprintf(osd->renderer->stream->xine, XINE_VERBOSITY_LOG, 
-	    _("osd: error loading font %s with ft2\n"), fontname);
-  }
-
-  free(osd->ft2);
-  osd->ft2 = NULL;
-  return 0;
-
- end:
   if (FT_Set_Pixel_Sizes(osd->ft2->face, 0, size)) {
     xprintf(osd->renderer->stream->xine, XINE_VERBOSITY_LOG,
 	    _("osd: error setting font size (no scalable font?)\n"));
@@ -1577,7 +1709,6 @@ static uint32_t osd_get_capabilities (osd_object_t *osd) {
 osd_renderer_t *_x_osd_renderer_init( xine_stream_t *stream ) {
 
   osd_renderer_t *this;
-  char str[1024];
 
   this = xine_xmalloc(sizeof(osd_renderer_t)); 
   this->stream = stream;
@@ -1588,12 +1719,22 @@ osd_renderer_t *_x_osd_renderer_init( xine_stream_t *stream ) {
   /*
    * load available fonts
    */
+  {
+    const char *const *data_dirs = xdgSearchableDataDirectories(stream->xine->basedir_handle);
+    if ( data_dirs )
+      while( (*data_dirs) && *(*data_dirs) ) {
+	/* sizeof("") takes care of the final NUL byte */
+	char *fontpath = xine_xmalloc( strlen(*data_dirs) + sizeof("/"PACKAGE"/fonts/") );
+	strcpy(fontpath, *data_dirs);
+	strcat(fontpath, "/"PACKAGE"/fonts/");
 
-  osd_preload_fonts (this, XINE_FONTDIR);
+	osd_preload_fonts(this, fontpath);
 
-  snprintf (str, 1024, "%s/.xine/fonts", xine_get_homedir ());
-
-  osd_preload_fonts (this, str);
+	free(fontpath);
+	
+	data_dirs++;
+      }
+  }
 
   this->textpalette = this->stream->xine->config->register_enum (this->stream->xine->config,
                                              "ui.osd.text_palette", 0,
