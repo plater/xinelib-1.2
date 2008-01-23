@@ -31,7 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "configfile.h"
+#include <xine/configfile.h>
 
 #define LOG_MODULE "configfile"
 #define LOG_VERBOSE
@@ -39,8 +39,8 @@
 #define LOG
 */
 
-#include "xineutils.h"
-#include "xine_internal.h"
+#include <xine/xineutils.h>
+#include <xine/xine_internal.h>
 
 static const xine_config_entry_translation_t *config_entry_translation_user = NULL;
 static const xine_config_entry_translation_t config_entry_translation[] = {
@@ -182,8 +182,6 @@ static const xine_config_entry_translation_t config_entry_translation[] = {
   { "video.pgx64_overlay_mode",			"" },
   { "video.pgx64_saturation",			"video.output.pgx64_saturation" },
   { "video.sdl_hw_accel",			"video.device.sdl_hw_accel" },
-  { "video.syncfb_default_repeat",		"video.device.syncfb_default_repeat" },
-  { "video.syncfb_device",			"video.device.syncfb_device" },
   { "video.unichrome_cpu_save",			"video.device.unichrome_cpu_save" },
   { "video.vertical_position",			"video.output.vertical_position" },
   { "video.vidix_blue_intensity",		"video.output.vidix_blue_intensity" },
@@ -207,7 +205,7 @@ static const xine_config_entry_translation_t config_entry_translation[] = {
 
 
 static int config_section_enum(const char *sect) {
-  static char *known_section[] = {
+  static const char *const known_section[] = {
     "gui",
     "ui",
     "audio",
@@ -347,7 +345,7 @@ static void config_remove(config_values_t *this, cfg_entry_t *entry, cfg_entry_t
     prev->next = entry->next;
 }
 
-static const char *config_xlate_internal (const char *key, const xine_config_entry_translation_t *trans)
+static char *config_xlate_internal (const char *key, const xine_config_entry_translation_t *trans)
 {
   --trans;
   while ((++trans)->old_name)

@@ -28,8 +28,8 @@
 #define LOG
 */
 
-#include "xine_internal.h"
-#include "post.h"
+#include <xine/xine_internal.h>
+#include <xine/post.h>
 
 /* FIXME: This plugin needs to handle overlays as well. */
 
@@ -41,7 +41,7 @@ static const post_info_t mosaico_special_info = { XINE_POST_TYPE_VIDEO_COMPOSE }
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */  
-  { PLUGIN_POST, 9, "mosaico", XINE_VERSION_CODE, &mosaico_special_info, &mosaico_init_plugin },
+  { PLUGIN_POST, 10, "mosaico", XINE_VERSION_CODE, &mosaico_special_info, &mosaico_init_plugin },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };
 
@@ -96,9 +96,6 @@ struct post_mosaico_s {
 static post_plugin_t *mosaico_open_plugin(post_class_t *class_gen, int inputs,
 					 xine_audio_port_t **audio_target,
 					 xine_video_port_t **video_target);
-static char          *mosaico_get_identifier(post_class_t *class_gen);
-static char          *mosaico_get_description(post_class_t *class_gen);
-static void           mosaico_class_dispose(post_class_t *class_gen);
 
 /* plugin instance functions */
 static void           mosaico_dispose(post_plugin_t *this_gen);
@@ -128,9 +125,9 @@ static void *mosaico_init_plugin(xine_t *xine, void *data)
     return NULL;
   
   this->class.open_plugin     = mosaico_open_plugin;
-  this->class.get_identifier  = mosaico_get_identifier;
-  this->class.get_description = mosaico_get_description;
-  this->class.dispose         = mosaico_class_dispose;
+  this->class.identifier      = "mosaico";
+  this->class.description     = N_("Mosaico is a picture in picture (pip) post plugin");
+  this->class.dispose         = default_post_class_dispose;
   this->xine                  = xine;
 
   return &this->class;
@@ -158,7 +155,7 @@ static post_plugin_t *mosaico_open_plugin(post_class_t *class_gen, int inputs,
   
   _x_post_init(&this->post, 0, inputs);
 
-  this->pip       = (mosaico_pip_t *)xine_xmalloc(sizeof(mosaico_pip_t) * (inputs - 1));
+  this->pip       = (mosaico_pip_t *)xine_xcalloc((inputs - 1), sizeof(mosaico_pip_t));
   this->pip_count = inputs - 1;
 
   pthread_cond_init(&this->vpts_limit_changed, NULL);
@@ -201,22 +198,6 @@ static post_plugin_t *mosaico_open_plugin(post_class_t *class_gen, int inputs,
 
   return &this->post;
 }
-
-static char *mosaico_get_identifier(post_class_t *class_gen)
-{
-  return "mosaico";
-}
-
-static char *mosaico_get_description(post_class_t *class_gen)
-{
-  return "Mosaico is a picture in picture (pip) post plugin";
-}
-
-static void mosaico_class_dispose(post_class_t *class_gen)
-{
-  free(class_gen);
-}
-
 
 static void mosaico_dispose(post_plugin_t *this_gen)
 {
