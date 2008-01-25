@@ -88,11 +88,11 @@
 #endif
 
 #include "xine.h"
-#include "video_out.h"
+#include <xine/video_out.h>
 
-#include "xine_internal.h"
+#include <xine/xine_internal.h>
 #include "yuv2rgb.h"
-#include "xineutils.h"
+#include <xine/xineutils.h>
 #include "x11osd.h"
 
 
@@ -1613,7 +1613,7 @@ static int opengl_set_property (vo_driver_t *this_gen,
     this->sc.force_redraw = 1;    /* trigger re-calc of output size */
 
     xprintf(this->xine, XINE_VERBOSITY_DEBUG, 
-	    "video_out_opengl: aspect ratio changed to %s\n", _x_vo_scale_aspect_ratio_name(value));
+	    "video_out_opengl: aspect ratio changed to %s\n", _x_vo_scale_aspect_ratio_name_table[value]);
     break;
   case VO_PROP_BRIGHTNESS:
     this->yuv2rgb_brightness = value;
@@ -1954,28 +1954,13 @@ static vo_driver_t *opengl_open_plugin (video_driver_class_t *class_gen, const v
 /*
  * class functions
  */
-
-static char* opengl_get_identifier (video_driver_class_t *this_gen) {
-  return "opengl";
-}
-
-static char* opengl_get_description (video_driver_class_t *this_gen) {
-  return _("xine video output plugin using the OpenGL 3D graphics API");
-}
-
-static void opengl_dispose_class (video_driver_class_t *this_gen) {
-  opengl_class_t         *this = (opengl_class_t *) this_gen;
-
-  free (this);
-}
-
 static void *opengl_init_class (xine_t *xine, void *visual_gen) {
   opengl_class_t	       *this = (opengl_class_t *) xine_xmalloc (sizeof (opengl_class_t));
 
   this->driver_class.open_plugin     = opengl_open_plugin;
-  this->driver_class.get_identifier  = opengl_get_identifier;
-  this->driver_class.get_description = opengl_get_description;
-  this->driver_class.dispose         = opengl_dispose_class;
+  this->driver_class.identifier      = "opengl";
+  this->driver_class.description     = N_("xine video output plugin using the OpenGL 3D graphics API");
+  this->driver_class.dispose         = default_video_driver_class_dispose;
   this->xine                         = xine;
 
   return this;
@@ -1994,6 +1979,6 @@ static const vo_info_t vo_info_opengl = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */  
-  { PLUGIN_VIDEO_OUT, 21, "opengl", XINE_VERSION_CODE, &vo_info_opengl, opengl_init_class },
+  { PLUGIN_VIDEO_OUT, 22, "opengl", XINE_VERSION_CODE, &vo_info_opengl, opengl_init_class },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };
