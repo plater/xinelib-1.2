@@ -32,7 +32,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <inttypes.h>
-#include "buffer.h"
+#include <xine/buffer.h>
+#include <xine/xineutils.h>
+#include <xine/xine_internal.h>
 #include "bswap.h"
 
 typedef struct video_db_s {
@@ -1161,7 +1163,7 @@ static uint32_t cached_buf_type=0;
   return 0;
 }
 
-char * _x_buf_video_name( uint32_t buf_type ) {
+const char *_x_buf_video_name( uint32_t buf_type ) {
 int i;
   
   buf_type &= 0xffff0000;
@@ -1195,7 +1197,7 @@ static uint32_t cached_buf_type=0;
   return 0;
 }
 
-char * _x_buf_audio_name( uint32_t buf_type ) {
+const char *_x_buf_audio_name( uint32_t buf_type ) {
 int i;
   
   buf_type &= 0xffff0000;
@@ -1208,6 +1210,43 @@ int i;
 
   return "";
 }
+
+
+static void code_to_text (char ascii[5], uint32_t code)
+{
+  int i;
+  for (i = 0; i < 4; ++i)
+  {
+    int byte = code & 0xFF;
+    ascii[i] = (byte < ' ') ? ' ' : (byte >= 0x7F) ? '.' : (char) byte;
+    code >>= 8;
+  }
+}
+
+void _x_report_video_fourcc (xine_t *xine, const char *module, uint32_t code)
+{
+  if (code)
+  {
+    char ascii[5];
+    code_to_text (ascii, code);
+    xprintf (xine, XINE_VERBOSITY_LOG,
+             _("%s: unknown video FourCC code %#x \"%s\"\n"),
+             module, code, ascii);
+  }
+}
+
+void _x_report_audio_format_tag (xine_t *xine, const char *module, uint32_t code)
+{
+  if (code)
+  {
+    char ascii[5];
+    code_to_text (ascii, code);
+    xprintf (xine, XINE_VERBOSITY_LOG,
+             _("%s: unknown audio format tag code %#x \"%s\"\n"),
+             module, code, ascii);
+  }
+}
+
 
 void _x_bmiheader_le2me( xine_bmiheader *bih ) {
   /* OBS: fourcc must be read using machine endianness
