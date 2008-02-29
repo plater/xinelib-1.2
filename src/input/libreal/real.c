@@ -33,8 +33,8 @@
 #include "real.h"
 #include "asmrp.h"
 #include "sdpplin.h"
-#include "xine_internal.h"
-#include "xineutils.h"
+#include <xine/xine_internal.h>
+#include <xine/xineutils.h>
 #include "bswap.h"
 
 #define XOR_TABLE_LEN 37
@@ -316,14 +316,13 @@ void real_calc_response_and_checksum (char *response, char *chksum, char *challe
   int   ch_len, resp_len;
   int   i;
   char *ptr;
-  char  buf[128];
+  char  buf[128] = { 0, };
 
   /* initialize return values */
   memset(response, 0, 64);
   memset(chksum, 0, 34);
 
   /* initialize buffer */
-  memset(buf, 0, 128);
   ptr=buf;
   _X_BE_32C(ptr, 0xa1e9149d);
   ptr+=4;
@@ -353,10 +352,10 @@ void real_calc_response_and_checksum (char *response, char *chksum, char *challe
   calc_response_string (response, buf);
 
   /* add tail */
-  resp_len = strlen (response);
-  strcpy (&response[resp_len], "01d0a8e3");
+  strcat(response, "01d0a8e3");
 
   /* calculate checksum */
+  resp_len = strlen (response);
   for (i=0; i<resp_len/4; i++)
     chksum[i] = response[i*4];
 }
@@ -458,7 +457,7 @@ rmff_header_t *real_parse_sdp(char *data, char **stream_rules, uint32_t bandwidt
       desc->copyright,
       desc->abstract);
   header->data=rmff_new_dataheader(0,0);
-  header->streams = xine_xmalloc(sizeof(rmff_mdpr_t*)*(desc->stream_count+1));
+  header->streams = xine_xcalloc((desc->stream_count+1), sizeof(rmff_mdpr_t*));
   lprintf("number of streams: %u\n", desc->stream_count);
 
   for (i=0; i<desc->stream_count; i++) {
@@ -660,7 +659,7 @@ rmff_header_t  *real_setup_and_get_header(rtsp_t *rtsp_session, uint32_t bandwid
     
   lprintf("Stream description size: %i\n", size);
 
-  description = malloc(sizeof(char)*(size+1));
+  description = calloc(size+1, sizeof(char));
 
   if( rtsp_read_data(rtsp_session, description, size) <= 0) {
     xine_buffer_free(buf);
