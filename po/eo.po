@@ -1304,7 +1304,7 @@ msgstr "%s: estas neeble konektigi %s:%d\n"
 
 #: src/input/input_cdda.c:1668
 #, c-format
-msgid "input_cdda: successfully connected to cddb server '%s:%d'.\n"
+msgid "input_cdda: successfuly connected to cddb server '%s:%d'.\n"
 msgstr "input_cdda: sukcesa konekto kun cddb servilo '%s:%d'.\n"
 
 #: src/input/input_cdda.c:1673
@@ -4185,7 +4185,7 @@ msgstr "Uzu metodon nomitan bob kiel metodo de akcelita malplektado."
 #: src/video_out/video_out_xxmc.c:2564
 msgid ""
 "When interlacing is enabled for hardware accelerated frames,\n"
-"alternate between top and bottom field at double the frame rate.\n"
+"Alternate between top and bottom field at double the frame rate.\n"
 msgstr ""
 
 #: src/video_out/x11osd.c:276 src/video_out/xcbosd.c:270

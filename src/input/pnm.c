@@ -21,6 +21,8 @@
  * based upon code from joschka
  */
 
+#include <config.h>
+
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/socket.h>
@@ -43,9 +45,9 @@
 #include "pnm.h"
 #include "libreal/rmff.h"
 #include "bswap.h"
-#include "io_helper.h"
-#include "xineutils.h"
-#include "xine_internal.h"
+#include <xine/io_helper.h>
+#include <xine/xineutils.h>
+#include <xine/xine_internal.h>
 
 #define BUF_SIZE 4096
 #define HEADER_SIZE 4096
@@ -90,7 +92,7 @@ struct pnm_s {
 
 /* header of rm files */
 #define RM_HEADER_SIZE 0x12
-const unsigned char rm_header[]={
+static const unsigned char rm_header[]={
         0x2e, 0x52, 0x4d, 0x46, /* object_id      ".RMF" */
         0x00, 0x00, 0x00, 0x12, /* header_size    0x12   */
         0x00, 0x00,             /* object_version 0x00   */
@@ -100,7 +102,7 @@ const unsigned char rm_header[]={
 
 /* data chunk header */
 #define PNM_DATA_HEADER_SIZE 18
-const unsigned char pnm_data_header[]={
+static const unsigned char pnm_data_header[]={
         'D','A','T','A',
          0,0,0,0,       /* data chunk size  */
          0,0,           /* object version   */
@@ -732,9 +734,7 @@ pnm_t *pnm_connect(xine_stream_t *stream, const char *mrl) {
   pathbegin=slash-mrl_ptr;
   hostend=colon-mrl_ptr;
 
-  p->host = malloc(sizeof(char)*hostend+1);
-  strncpy(p->host, mrl_ptr, hostend);
-  p->host[hostend]=0;
+  p->host = strndup(mrl_ptr, hostend);
 
   if (pathbegin < strlen(mrl_ptr)) p->path=strdup(mrl_ptr+pathbegin+1);
   if (colon != slash) {
