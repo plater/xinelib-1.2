@@ -36,9 +36,9 @@
 #define LOG
 */
 
-#include "xine_internal.h"
-#include "buffer.h"
-#include "xineutils.h"
+#include <xine/xine_internal.h>
+#include <xine/buffer.h>
+#include <xine/xineutils.h>
 
 #ifdef _MSC_VER
 /* ffmpeg has own definitions of those types */
@@ -54,13 +54,15 @@
 
 #ifdef HAVE_FFMPEG_AVUTIL_H
 #  include <avcodec.h>
-#elif defined HAVE_FFMPEG
-#  include <libavcodec/avcodec.h>
+#  include <rational.h>
+#  define FFMPEG_AVCODEC_H
+#  define FFMPEG_RATIONAL_H
+#  define av_unused
 #else
-#  include "../../libffmpeg/libavcodec/avcodec.h"
+#  include <libavcodec/avcodec.h>
 #endif
 
-#include "../../libffmpeg/libavcodec/dvdata.h"
+#include <libavcodec/dvdata.h> /* This is not installed by FFmpeg, its usage has to be cleared up */
 
 #ifdef _MSC_VER
 #  undef malloc
@@ -94,7 +96,6 @@ typedef struct dvaudio_decoder_s {
   int               decoder_ok;
 
 } dvaudio_decoder_t;
-
 
 /*
  * This is the dumbest implementation of all -- it simply looks at
@@ -385,18 +386,6 @@ static audio_decoder_t *dvaudio_open_plugin (audio_decoder_class_t *class_gen, x
   return &this->audio_decoder;
 }
 
-static char *dvaudio_get_identifier (audio_decoder_class_t *this) {
-  return "dv audio";
-}
-
-static char *dvaudio_get_description (audio_decoder_class_t *this) {
-  return "dv audio decoder plugin";
-}
-
-static void dvaudio_dispose_class (audio_decoder_class_t *this) {
-  free (this);
-}
-
 static void *init_dvaudio_plugin (xine_t *xine, void *data) {
 
   dvaudio_class_t *this ;
@@ -404,9 +393,9 @@ static void *init_dvaudio_plugin (xine_t *xine, void *data) {
   this = (dvaudio_class_t *) xine_xmalloc (sizeof (dvaudio_class_t));
 
   this->decoder_class.open_plugin     = dvaudio_open_plugin;
-  this->decoder_class.get_identifier  = dvaudio_get_identifier;
-  this->decoder_class.get_description = dvaudio_get_description;
-  this->decoder_class.dispose         = dvaudio_dispose_class;
+  this->decoder_class.identifier      = "dv audio";
+  this->decoder_class.description     = N_("dv audio decoder plugin");
+  this->decoder_class.dispose         = default_audio_decoder_class_dispose;
 
   return this;
 }
@@ -427,6 +416,6 @@ static const decoder_info_t dec_info_dvaudio = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */  
-  { PLUGIN_AUDIO_DECODER, 15, "dvaudio", XINE_VERSION_CODE, &dec_info_dvaudio, init_dvaudio_plugin },
+  { PLUGIN_AUDIO_DECODER, 16, "dvaudio", XINE_VERSION_CODE, &dec_info_dvaudio, init_dvaudio_plugin },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };
