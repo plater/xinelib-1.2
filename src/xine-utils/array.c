@@ -23,8 +23,8 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "attributes.h"
-#include "array.h"
+#include <xine/attributes.h>
+#include <xine/array.h>
 
 #define MIN_CHUNK_SIZE    32
 
@@ -56,7 +56,7 @@ xine_array_t *xine_array_new(size_t initial_size) {
   if (initial_size < MIN_CHUNK_SIZE)
     initial_size = MIN_CHUNK_SIZE;
 
-  new_array->chunk = (void**)malloc(sizeof(void*) * initial_size);
+  new_array->chunk = (void**)calloc(initial_size, sizeof(void*));
   if (!new_array->chunk) {
     free(new_array);
     return NULL;
