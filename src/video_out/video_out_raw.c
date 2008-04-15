@@ -47,12 +47,12 @@
 #include <ctype.h>
 #include <pthread.h>
 
-#include "xine.h"
-#include "video_out.h"
+#include <xine.h>
+#include <xine/video_out.h>
 
-#include "xine_internal.h"
+#include <xine/xine_internal.h>
 #include "yuv2rgb.h"
-#include "xineutils.h"
+#include <xine/xineutils.h>
 
 
 
@@ -560,36 +560,14 @@ static vo_driver_t *raw_open_plugin (video_driver_class_t *class_gen, const void
  * class functions
  */
 
-static char* raw_get_identifier (video_driver_class_t *this_gen)
-{
-  return "raw";
-}
-
-
-
-static char* raw_get_description (video_driver_class_t *this_gen)
-{
-  return _("xine video output plugin passing raw data to supplied callback");
-}
-
-
-
-static void raw_dispose_class (video_driver_class_t *this_gen)
-{
-  raw_class_t *this = (raw_class_t *) this_gen;
-  free (this);
-}
-
-
-
 static void *raw_init_class (xine_t *xine, void *visual_gen)
 {
   raw_class_t *this = (raw_class_t *) xine_xmalloc (sizeof (raw_class_t));
 
   this->driver_class.open_plugin     = raw_open_plugin;
-  this->driver_class.get_identifier  = raw_get_identifier;
-  this->driver_class.get_description = raw_get_description;
-  this->driver_class.dispose         = raw_dispose_class;
+  this->driver_class.identifier      = "raw";
+  this->driver_class.description     = _("xine video output plugin passing raw data to supplied callback");
+  this->driver_class.dispose         = default_video_driver_class_dispose;
   this->xine                         = xine;
 
   return this;
@@ -609,6 +587,6 @@ static const vo_info_t vo_info_raw = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */
-  { PLUGIN_VIDEO_OUT, 21, "raw", XINE_VERSION_CODE, &vo_info_raw, raw_init_class },
+  { PLUGIN_VIDEO_OUT, 22, "raw", XINE_VERSION_CODE, &vo_info_raw, raw_init_class },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };
