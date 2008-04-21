@@ -26,7 +26,6 @@
 
 #include <stdio.h>
 #include <stdarg.h>
-#include <string.h>  /* For memset */
 
 #define LOG_MODULE "scratch"
 #define LOG_VERBOSE
@@ -34,8 +33,8 @@
 #define LOG
 */
 
-#include "xineutils.h"
-#include "scratch.h"
+#include <xine/xineutils.h>
+#include <xine/scratch.h>
 
 static void __attribute__((__format__(__printf__, 2, 0)))
   scratch_printf (scratch_buffer_t *this, const char *format, va_list argp)
@@ -105,7 +104,6 @@ static void scratch_dispose (scratch_buffer_t *this) {
 
 scratch_buffer_t *_x_new_scratch_buffer (int num_lines) {
   scratch_buffer_t *this;
-  int               i;
 
   this = xine_xmalloc (sizeof (scratch_buffer_t));
 
