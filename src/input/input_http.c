@@ -46,9 +46,9 @@
 #define LOG
 */
 
-#include "xine_internal.h"
-#include "xineutils.h"
-#include "input_plugin.h"
+#include <xine/xine_internal.h>
+#include <xine/xineutils.h>
+#include <xine/input_plugin.h>
 #include "net_buf_ctrl.h"
 #include "http_helper.h"
 
@@ -69,7 +69,6 @@ typedef struct {
 
   xine_stream_t   *stream;
   
-  int              fh;
   char            *mrl;
 
   nbc_t           *nbc; 
@@ -78,32 +77,30 @@ typedef struct {
   off_t            contentlength;
     
   char             buf[BUFSIZE];
-  char             proxybuf[BUFSIZE];
 
-  char             auth[BUFSIZE];
-  char             proxyauth[BUFSIZE];
-  
+  char             preview[MAX_PREVIEW_SIZE];
+  off_t            preview_size;
+
   char            *proto;
   char            *user;
   char            *password;
   char            *host;
-  int              port;
   char            *uri;
-  
-  char             preview[MAX_PREVIEW_SIZE];
-  off_t            preview_size;
-  
-  /* Last.FM streaming server */
-  unsigned char    is_lastfm;
+  int              port;
+
+  int              fh;
+
+  /** Set to 1 if the stream is a NSV stream. */
+  int              is_nsv:1;
+  /** Set to 1 if the stream comes from last.fm. */
+  int              is_lastfm:1;
+  /** Set to 1 if the stream is ShoutCast. */
+  int              shoutcast_mode:1;
 
   /* ShoutCast */
-  int              shoutcast_mode;
   int              shoutcast_metaint;
   off_t            shoutcast_pos;
   char            *shoutcast_songtitle;
-
-  /* NSV */
-  int              is_nsv;
 
   /* scratch buffer for forward seeking */
 
@@ -119,13 +116,13 @@ typedef struct {
   config_values_t  *config;
 
   char             *proxyhost;
+  char             *proxyhost_env;
   int               proxyport;
+  int               proxyport_env;
+
   char             *proxyuser;
   char             *proxypassword;
   char             *noproxylist;
-
-  char             *proxyhost_env;
-  int               proxyport_env;
 } http_input_class_t;
 
 static void proxy_host_change_cb (void *this_gen, xine_cfg_entry_t *cfg) {
@@ -231,7 +228,7 @@ static int _x_use_proxy(http_input_class_t *this, const char *host) {
 }
 
 static int http_plugin_basicauth (const char *user, const char *password, char* dest, int len) {
-  static char *enctable="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+  static const char enctable[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
   char        *tmp;
   char        *sptr;
   char        *dptr;
@@ -413,8 +410,9 @@ error:
 }
 
 static off_t http_plugin_read (input_plugin_t *this_gen,
-                               char *buf, off_t nlen) {
+                               void *buf_gen, off_t nlen) {
   http_input_plugin_t *this = (http_input_plugin_t *) this_gen;
+  char *buf = (char *)buf_gen;
   off_t n, num_bytes;
 
   num_bytes = 0;
@@ -655,6 +653,8 @@ static int http_plugin_open (input_plugin_t *this_gen ) {
   int                  use_proxy;
   int                  proxyport;
   int                  mpegurl_redirect = 0;
+  char                 auth[BUFSIZE];
+  char                 proxyauth[BUFSIZE];
   
   use_proxy = this_class->proxyhost && strlen(this_class->proxyhost);
   
@@ -662,7 +662,7 @@ static int http_plugin_open (input_plugin_t *this_gen ) {
     if (this_class->proxyuser && strlen(this_class->proxyuser)) {
       if (http_plugin_basicauth (this_class->proxyuser,
 			         this_class->proxypassword,
-				 this->proxyauth, BUFSIZE)) {
+				 proxyauth, BUFSIZE)) {
 	_x_message(this->stream, XINE_MSG_CONNECTION_REFUSED, "proxy error", NULL);
 	return 0;
       }
@@ -681,7 +681,7 @@ static int http_plugin_open (input_plugin_t *this_gen ) {
     this->port = DEFAULT_HTTP_PORT;
   
   if (this->user && strlen(this->user)) {
-    if (http_plugin_basicauth (this->user, this->password, this->auth, BUFSIZE)) {
+    if (http_plugin_basicauth (this->user, this->password, auth, BUFSIZE)) {
       _x_message(this->stream, XINE_MSG_CONNECTION_REFUSED, "basic auth error", NULL);
       return -1;
     }
@@ -762,11 +762,11 @@ static int http_plugin_open (input_plugin_t *this_gen ) {
   
   if (this_class->proxyuser && strlen(this_class->proxyuser)) {
     buflen += snprintf (this->buf + buflen, BUFSIZE - buflen,
-			"Proxy-Authorization: Basic %s\015\012", this->proxyauth);
+			"Proxy-Authorization: Basic %s\015\012", proxyauth);
   }
   if (this->user && strlen(this->user)) {
     buflen += snprintf (this->buf + buflen, BUFSIZE - buflen,
-			"Authorization: Basic %s\015\012", this->auth);
+			"Authorization: Basic %s\015\012", auth);
   }
   
   buflen += snprintf(this->buf + buflen, BUFSIZE - buflen,
@@ -836,7 +836,12 @@ static int http_plugin_open (input_plugin_t *this_gen ) {
 		    _("input_http: http status not 2xx: >%d %s<\n"),
 		                        httpcode, httpstatus);
 	  return -7;
-	} else if (httpcode == 403 || httpcode == 401) {
+	} else if (httpcode == 401) {
+	  xine_log (this->stream->xine, XINE_LOG_MSG,
+		    _("input_http: http status not 2xx: >%d %s<\n"),
+		    httpcode, httpstatus);
+          /* don't return - there may be a WWW-Authenticate header... */
+	} else if (httpcode == 403) {
           _x_message(this->stream, XINE_MSG_PERMISSION_ERROR, this->mrl, NULL);
 	  xine_log (this->stream->xine, XINE_LOG_MSG,
 		    _("input_http: http status not 2xx: >%d %s<\n"),
@@ -872,6 +877,9 @@ static int http_plugin_open (input_plugin_t *this_gen ) {
           this->mrl = href;
           return http_plugin_open(this_gen);
         }
+
+        if (!strncasecmp (this->buf, "WWW-Authenticate: ", 18))
+          strcpy (this->preview, this->buf + 18);
 
 	{
 	  static const char mpegurl_ct_str[] = "Content-Type: audio/x-mpegurl";
@@ -948,6 +956,10 @@ static int http_plugin_open (input_plugin_t *this_gen ) {
   }
 
   lprintf ("end of headers\n");
+
+  if (httpcode == 401)
+    _x_message(this->stream, XINE_MSG_AUTHENTICATION_NEEDED,
+               this->mrl, *this->preview ? this->preview : NULL, NULL);
 
   if ( mpegurl_redirect ) {
     char buf[4096] = { 0, };
@@ -1038,19 +1050,10 @@ static input_plugin_t *http_class_get_instance (input_class_t *cls_gen, xine_str
   return &this->input_plugin;
 }
 
-static const char *http_class_get_description (input_class_t *this_gen) {
-  return _("http input plugin");
-}
-
-static const char *http_class_get_identifier (input_class_t *this_gen) {
-  return "http";
-}
-
 static void http_class_dispose (input_class_t *this_gen) {
   http_input_class_t  *this = (http_input_class_t *) this_gen;
   
-  if(this->proxyhost_env)
-    free(this->proxyhost_env);
+  free(this->proxyhost_env);
 
   free (this);
 }
@@ -1067,8 +1070,8 @@ static void *init_class (xine_t *xine, void *data) {
   config       = xine->config;
 
   this->input_class.get_instance       = http_class_get_instance;
-  this->input_class.get_identifier     = http_class_get_identifier;
-  this->input_class.get_description    = http_class_get_description;
+  this->input_class.identifier         = "http";
+  this->input_class.description        = N_("http input plugin");
   this->input_class.get_dir            = NULL;
   this->input_class.get_autoplay_list  = NULL;
   this->input_class.dispose            = http_class_dispose;
@@ -1136,6 +1139,6 @@ static void *init_class (xine_t *xine, void *data) {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */  
-  { PLUGIN_INPUT | PLUGIN_MUST_PRELOAD, 17, "http", XINE_VERSION_CODE, NULL, init_class },
+  { PLUGIN_INPUT | PLUGIN_MUST_PRELOAD, 18, "http", XINE_VERSION_CODE, NULL, init_class },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };
