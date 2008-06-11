@@ -21,9 +21,9 @@
  * Copyright (C) 2002 Rémi Guyomarch <rguyom@pobox.com>
  */
 
-#include "xine_internal.h"
-#include "post.h"
-#include "xineutils.h"
+#include <xine/xine_internal.h>
+#include <xine/post.h>
+#include <xine/xineutils.h>
 #include <pthread.h>
 
 /*===========================================================================*/
@@ -246,9 +246,6 @@ static xine_post_api_t post_api = {
 static post_plugin_t *unsharp_open_plugin(post_class_t *class_gen, int inputs,
 					 xine_audio_port_t **audio_target,
 					 xine_video_port_t **video_target);
-static char          *unsharp_get_identifier(post_class_t *class_gen);
-static char          *unsharp_get_description(post_class_t *class_gen);
-static void           unsharp_class_dispose(post_class_t *class_gen);
 
 /* plugin instance functions */
 static void           unsharp_dispose(post_plugin_t *this_gen);
@@ -262,15 +259,15 @@ static int            unsharp_draw(vo_frame_t *frame, xine_stream_t *stream);
 
 void *unsharp_init_plugin(xine_t *xine, void *data)
 {
-  post_class_t *class = (post_class_t *)malloc(sizeof(post_class_t));
+  post_class_t *class = (post_class_t *)xine_xmalloc(sizeof(post_class_t));
 
   if (!class)
     return NULL;
   
   class->open_plugin     = unsharp_open_plugin;
-  class->get_identifier  = unsharp_get_identifier;
-  class->get_description = unsharp_get_description;
-  class->dispose         = unsharp_class_dispose;
+  class->identifier      = "unsharp";
+  class->description     = N_("unsharp mask & gaussian blur");
+  class->dispose         = default_post_class_dispose;
 
   return class;
 }
@@ -323,21 +320,6 @@ static post_plugin_t *unsharp_open_plugin(post_class_t *class_gen, int inputs,
   this->post.dispose = unsharp_dispose;
   
   return &this->post;
-}
-
-static char *unsharp_get_identifier(post_class_t *class_gen)
-{
-  return "unsharp";
-}
-
-static char *unsharp_get_description(post_class_t *class_gen)
-{
-  return "unsharp mask & gaussian blur";
-}
-
-static void unsharp_class_dispose(post_class_t *class_gen)
-{
-  free(class_gen);
 }
 
 static void unsharp_free_SC(post_plugin_unsharp_t *this)
