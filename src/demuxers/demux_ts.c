@@ -147,9 +147,9 @@
 #define LOG
 */
 
-#include "xine_internal.h"
-#include "xineutils.h"
-#include "demux.h"
+#include <xine/xine_internal.h>
+#include <xine/xineutils.h>
+#include <xine/demux.h>
 
 /*
   #define TS_LOG
@@ -295,7 +295,6 @@ typedef struct {
   uint32_t         pmt_pid[MAX_PMTS];
   uint8_t         *pmt[MAX_PMTS];
   uint8_t         *pmt_write_ptr[MAX_PMTS];
-  uint32_t         crc32_table[256];
   uint32_t         last_pmt_crc;
   /*
    * Stuff to do with the transport header. As well as the video
@@ -354,28 +353,6 @@ typedef struct {
   config_values_t  *config;
 } demux_ts_class_t;
 
-
-static void demux_ts_build_crc32_table(demux_ts_t*this) {
-  uint32_t  i, j, k;
-
-  for( i = 0 ; i < 256 ; i++ ) {
-    k = 0;
-    for (j = (i << 24) | 0x800000 ; j != 0x80000000 ; j <<= 1) {
-      k = (k << 1) ^ (((k ^ j) & 0x80000000) ? 0x04c11db7 : 0);
-    }
-    this->crc32_table[i] = k;
-  }
-}
-
-static uint32_t demux_ts_compute_crc32(demux_ts_t*this, uint8_t *data, 
-				       int32_t length, uint32_t crc32) {
-  int32_t i;
-
-  for(i = 0; i < length; i++) {
-    crc32 = (crc32 << 8) ^ this->crc32_table[(crc32 >> 24) ^ data[i]];
-  }
-  return crc32;
-}
 
 /* redefine abs as macro to handle 64-bit diffs.
    i guess llabs may not be available everywhere */
@@ -595,8 +572,7 @@ static void demux_ts_parse_pat (demux_ts_t*this, unsigned char *original_pkt,
   }
 
   /* Check CRC. */
-  calc_crc32 = demux_ts_compute_crc32 (this, pkt+5, section_length+3-4,
-                                       0xffffffff);
+  calc_crc32 = _x_compute_crc32 (pkt+5, section_length+3-4, 0xffffffff);
   if (crc32 != calc_crc32) {
     xprintf (this->stream->xine, XINE_VERBOSITY_DEBUG, 
 	     "demux_ts: demux error! PAT with invalid CRC32: packet_crc32: %.8x calc_crc32: %.8x\n",
@@ -1096,7 +1072,7 @@ static void demux_ts_parse_pmt (demux_ts_t     *this,
   unsigned char *stream;
   unsigned int 	 i;
   int 		 count;
-  char 		*ptr = NULL;
+  uint8_t	*ptr = NULL;
   unsigned char  len;
   unsigned int   offset=0;  
   
@@ -1212,9 +1188,8 @@ printf("Program Number is %i, looking for %i\n",program_number,this->program_num
   crc32 |= (uint32_t) this->pmt[program_count][section_length+3-1] ;
 
   /* Check CRC. */
-  calc_crc32 = demux_ts_compute_crc32 (this,
-                                       this->pmt[program_count],
-                                       section_length+3-4, 0xffffffff);
+  calc_crc32 = _x_compute_crc32 (this->pmt[program_count],
+                                 section_length+3-4, 0xffffffff);
   if (crc32 != calc_crc32) {
     xprintf (this->stream->xine, XINE_VERBOSITY_DEBUG, 
 	     "demux_ts: demux error! PMT with invalid CRC32: packet_crc32: %#.8x calc_crc32: %#.8x\n",
@@ -2044,8 +2019,6 @@ static void demux_ts_send_headers (demux_plugin_t *this_gen) {
 
   this->send_newpts = 1;
   
-  demux_ts_build_crc32_table (this);
-  
   this->status = DEMUX_OK ;
 
   this->send_end_buffers  = 1;
@@ -2207,34 +2180,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen,
   }
     break;
 
-  case METHOD_BY_EXTENSION: {
-    const char *const mrl = input->get_mrl (input);
-
-    /* check extension */
-    const char *const extensions = class_gen->get_extensions (class_gen);
-
-    if (_x_demux_check_extension (mrl, extensions))
-      break;
-
-    /* accept dvb streams */
-    /*
-     * Also handle the special dvbs,dvbt and dvbc mrl formats:
-     * the content is exactly the same but the input plugin
-     * uses a different tuning algorithm [Pragma]
-     */
-
-    if (!strncasecmp (mrl, "dvb://", 6))
-      break;
-    if (!strncasecmp (mrl, "dvbs://", 7))
-      break;
-    if (!strncasecmp (mrl, "dvbc://", 7))
-      break;
-    if (!strncasecmp (mrl, "dvbt://", 7))
-      break;
-
-    return NULL;
-  }
-
+  case METHOD_BY_MRL:
   case METHOD_EXPLICIT:
     break;
 
@@ -2303,30 +2249,6 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen,
 /*
  * ts demuxer class
  */
-
-static const char *get_description (demux_class_t *this_gen) {
-  return "MPEG Transport Stream demuxer";
-}
- 
-static const char *get_identifier (demux_class_t *this_gen) {
-  return "MPEG_TS";
-}
-
-static const char *get_extensions (demux_class_t *this_gen) {
-  return "ts m2t trp";
-}
-
-static const char *get_mimetypes (demux_class_t *this_gen) {
-  return NULL;
-}
-
-static void class_dispose (demux_class_t *this_gen) {
-
-  demux_ts_class_t *this = (demux_ts_class_t *) this_gen;
-
-  free (this);
-}
-
 static void *init_class (xine_t *xine, void *data) {
   
   demux_ts_class_t     *this;
@@ -2336,11 +2258,16 @@ static void *init_class (xine_t *xine, void *data) {
   this->xine   = xine;
 
   this->demux_class.open_plugin     = open_plugin;
-  this->demux_class.get_description = get_description;
-  this->demux_class.get_identifier  = get_identifier;
-  this->demux_class.get_mimetypes   = get_mimetypes;
-  this->demux_class.get_extensions  = get_extensions;
-  this->demux_class.dispose         = class_dispose;
+  this->demux_class.description     = N_("MPEG Transport Stream demuxer");
+  this->demux_class.identifier      = "MPEG_TS";
+  this->demux_class.mimetypes       = NULL;
+
+  /* accept dvb streams; also handle the special dvbs,dvbt and dvbc
+   * mrl formats: the content is exactly the same but the input plugin
+   * uses a different tuning algorithm [Pragma]
+   */
+  this->demux_class.extensions      = "ts m2t trp dvb:// dvbs:// dvbc:// dvbt://";
+  this->demux_class.dispose         = default_demux_class_dispose;
 
   return this;
 }
@@ -2355,7 +2282,7 @@ static const demuxer_info_t demux_info_ts = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */  
-  { PLUGIN_DEMUX, 26, "mpeg-ts", XINE_VERSION_CODE, &demux_info_ts, init_class },
+  { PLUGIN_DEMUX, 27, "mpeg-ts", XINE_VERSION_CODE, &demux_info_ts, init_class },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };
 
