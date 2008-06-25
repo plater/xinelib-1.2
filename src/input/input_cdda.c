@@ -39,6 +39,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+#ifdef HAVE_ALLOCA_H
+#  include <alloca.h>
+#endif
 
 #ifdef HAVE_SYS_IOCTL_H
 #  include <sys/ioctl.h>
@@ -53,17 +56,25 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
+#include <basedir.h>
+
+#ifdef HAVE_FFMPEG_AVUTIL_H
+#  include <base64.h>
+#  include <sha1.h>
+#else
+#  include <libavutil/base64.h>
+#  include <libavutil/sha1.h>
+#endif
+
 #define LOG_MODULE "input_cdda"
 #define LOG_VERBOSE
 /*
 #define LOG
 */
 
-#include "sha1.h"
-#include "base64.h"
-#include "xine_internal.h"
-#include "xineutils.h"
-#include "input_plugin.h"
+#include <xine/xine_internal.h>
+#include <xine/xineutils.h>
+#include <xine/input_plugin.h>
 #include "media_helper.h"
 
 #if defined(__sun)
@@ -126,7 +137,6 @@ typedef struct {
     int                enabled;
     char              *server;
     int                port;
-    char              *cache_dir; 
     
     char              *cdiscid;
     char              *disc_title;
@@ -379,10 +389,10 @@ static cdrom_toc * init_cdrom_toc(void) {
 
 static void free_cdrom_toc(cdrom_toc *toc) {
 
-  if(toc && toc->toc_entries)
+  if ( toc ) {
     free(toc->toc_entries);
-  if (toc)
-    free (toc);
+    free(toc);
+  }
 }
 
 #if defined (__linux__)
@@ -983,7 +993,7 @@ static int parse_url (char *urlbuf, char** host, int *port) {
 #endif
 
 static int XINE_FORMAT_PRINTF(4, 5)
-network_command( xine_stream_t *stream, int socket, char *data_buf, char *msg, ...)
+network_command( xine_stream_t *stream, int socket, void *data_buf, const char *msg, ...)
 {
   char     buf[_BUFSIZ];
   va_list  args;
@@ -1032,13 +1042,13 @@ network_command( xine_stream_t *stream, int socket, char *data_buf, char *msg, .
 
 
 #ifndef WIN32
-static int network_connect(xine_stream_t *stream,  char *url )
+static int network_connect(xine_stream_t *stream,  const char *_url )
 {
   char *host;
   int port;
   int fd;
 
-  url = strdup(url);
+  char *url = strdup(_url);
   parse_url(url, &host, &port);
 
   if( !host || !strlen(host) || !port )
@@ -1177,15 +1187,6 @@ static void port_changed_cb(void *data, xine_cfg_entry_t *cfg) {
     this->cddb.port = cfg->num_value;
   }
 }
-static void cachedir_changed_cb(void *data, xine_cfg_entry_t *cfg) {
-  cdda_input_class_t *class = (cdda_input_class_t *) data;
-  
-  if(class->ip) {
-    cdda_input_plugin_t *this = class->ip;
-
-    this->cddb.cache_dir = cfg->str_value;
-  }
-}
 #ifdef CDROM_SELECT_SPEED
 static void speed_changed_cb(void *data, xine_cfg_entry_t *cfg) {
   cdda_input_class_t *class = (cdda_input_class_t *) data;
@@ -1288,51 +1289,27 @@ static void _cdda_mkdir_safe(xine_t *xine, char *path) {
 }
 
 /*
- * Make recursive directory creation
+ * Make recursive directory creation (given an absolute pathname)
  */
-static void _cdda_mkdir_recursive_safe(xine_t *xine, char *path) {
-  char *p, *pp;
-  char buf[XINE_PATH_MAX + XINE_NAME_MAX + 1];
-  char buf2[XINE_PATH_MAX + XINE_NAME_MAX + 1];
-
-  if(path == NULL)
+static void _cdda_mkdir_recursive_safe (xine_t *xine, char *path)
+{
+  if (!path)
     return;
 
-  memset(&buf, 0, sizeof(buf));
-  memset(&buf2, 0, sizeof(buf2));
+  char buf[strlen (path) + 1];
+  strcpy (buf, path);
+  char *p = strchr (buf, '/') ? : buf;
 
-  snprintf(buf, sizeof(buf), "%s", path);
-  pp = buf;
-  while((p = xine_strsep(&pp, "/")) != NULL) {
-    if(p && strlen(p)) {
-
-#ifdef WIN32
-      if (*buf2 != '\0') {
-#endif
-	size_t size = strlen(buf2);
-	snprintf(buf2 + size, sizeof(buf2) - size, "/%s", p);
-#ifdef WIN32
-      }
-      else {
-	snprintf(buf2, sizeof(buf2), "%s", p);
-      }
-#endif /* WIN32 */
-      
-      _cdda_mkdir_safe(xine, buf2);
-    }
-  }
-}
-
-/*
- * Where, by default, cddb cache files will be saved
- */
-static char *_cdda_cddb_get_default_location(void) {
-  static char buf[XINE_PATH_MAX + XINE_NAME_MAX + 1];
-  
-  memset(&buf, 0, sizeof(buf));
-  snprintf(buf, sizeof(buf), "%s/.xine/cddbcache", (xine_get_homedir()));
-  
-  return buf;
+  do
+  {
+    while (*p++ == '/') /**/;
+    p = strchr (p, '/');
+    if (p)
+      *p = 0;
+    _cdda_mkdir_safe (xine, buf);
+    if (p)
+      *p = '/';
+  } while (p);
 }
 
 /*
@@ -1434,15 +1411,17 @@ static int _cdda_cddb_handle_code(char *buf) {
  * Try to load cached cddb infos
  */
 static int _cdda_load_cached_cddb_infos(cdda_input_plugin_t *this) {
-  char  cdir[XINE_PATH_MAX + XINE_NAME_MAX + 1];
-  size_t cdir_size = 0;
   DIR  *dir;
+
+  const char *const xdg_cache_home = xdgCacheHome(this->stream->xine->basedir_handle);
 
   if(this == NULL)
     return 0;
   
-  cdir_size = snprintf(cdir, sizeof(cdir), "%s", this->cddb.cache_dir);
-  
+  const size_t cdir_size = strlen(xdg_cache_home) + sizeof("/"PACKAGE"/cddb") + 10 + 1;
+  char *const cdir = alloca(cdir_size);
+  sprintf(cdir, "%s/" PACKAGE "/cddb", xdg_cache_home);
+
   if((dir = opendir(cdir)) != NULL) {
     struct dirent *pdir;
     
@@ -1454,7 +1433,7 @@ static int _cdda_load_cached_cddb_infos(cdda_input_plugin_t *this) {
       if(!strcasecmp(pdir->d_name, discid)) {
 	FILE *fd;
 	
-	cdir_size += snprintf(cdir + cdir_size, sizeof(cdir) - cdir_size, "/%s", discid);
+	snprintf(cdir + cdir_size, 10, "/%s", discid);
 	if((fd = fopen(cdir, "r")) == NULL) {
 	  xprintf(this->stream->xine, XINE_VERBOSITY_DEBUG,
 		  "input_cdda: fopen(%s) failed: %s.\n", cdir, strerror(errno));
@@ -1559,20 +1538,23 @@ static int _cdda_load_cached_cddb_infos(cdda_input_plugin_t *this) {
  * Save cddb grabbed infos.
  */
 static void _cdda_save_cached_cddb_infos(cdda_input_plugin_t *this, char *filecontent) {
-  char   cfile[XINE_PATH_MAX + XINE_NAME_MAX + 1];
   FILE  *fd;
-  
+  char *cfile;
+
+  const char *const xdg_cache_home = xdgCacheHome(this->stream->xine->basedir_handle);
+
   if((this == NULL) || (filecontent == NULL))
     return;
   
-  memset(&cfile, 0, sizeof(cfile));
+  /* the filename is always 8 characters */
+  cfile = alloca(strlen(xdg_cache_home) + sizeof("/"PACKAGE"/cddb") + 9);
+  strcpy(cfile, xdg_cache_home);
+  strcat(cfile, "/"PACKAGE"/cddb");
 
-  /* Ensure "~/.xine/cddbcache" exist */
-  snprintf(cfile, sizeof(cfile), "%s", this->cddb.cache_dir);
-  
+  /* Ensure the cache directory exists */
   _cdda_mkdir_recursive_safe(this->stream->xine, cfile);
   
-  snprintf(cfile, sizeof(cfile), "%s/%08lx", this->cddb.cache_dir, this->cddb.disc_id);
+  sprintf(cfile, "%s/%08lx", cfile, this->cddb.disc_id);
   
   if((fd = fopen(cfile, "w")) == NULL) {
     xprintf(this->stream->xine, XINE_VERBOSITY_DEBUG,
@@ -1920,39 +1902,42 @@ static unsigned long _cdda_calc_cddb_id(cdda_input_plugin_t *this) {
  */
 static void _cdda_cdindex(cdda_input_plugin_t *this, cdrom_toc *toc) {
   char temp[10];
-  SHA_INFO sha;
-  unsigned char digest[33], *base64;
+  struct AVSHA1 *sha_ctx = malloc(av_sha1_size);
+  unsigned char digest[20];
+  /* We're going to encode 20 bytes in base64, which will become
+   * 6 * 32 / 8 = 24 bytes.
+   * libavutil's base64 encoding functions, though, wants the size to
+   * be at least len * 4 / 3 + 12, so let's use 39.
+   */
+  char base64[39];
   int i;
-  unsigned long size;
 
-  sha_init(&sha);
+  av_sha1_init(sha_ctx);
 
   sprintf(temp, "%02X", toc->first_track);
-  sha_update(&sha, (unsigned char*) temp, strlen(temp));
+  av_sha1_update(sha_ctx, (unsigned char*) temp, strlen(temp));
 
   sprintf(temp, "%02X", toc->last_track - toc->ignore_last_track);
-  sha_update(&sha, (unsigned char*) temp, strlen(temp));
+  av_sha1_update(sha_ctx, (unsigned char*) temp, strlen(temp));
 
   sprintf (temp, "%08X", toc->leadout_track.first_frame);// + 150);
-  sha_update(&sha, (unsigned char*) temp, strlen(temp));
+  av_sha1_update(sha_ctx, (unsigned char*) temp, strlen(temp));
 
   for (i = toc->first_track; i <= toc->last_track - toc->ignore_last_track; i++) {
     sprintf(temp, "%08X", toc->toc_entries[i - 1].first_frame);
-    sha_update(&sha, (unsigned char*) temp, strlen(temp));
+    av_sha1_update(sha_ctx, (unsigned char*) temp, strlen(temp));
   }
 
   for (i = toc->last_track - toc->ignore_last_track + 1; i < 100; i++) {
-    sha_update(&sha, (unsigned char*) temp, strlen(temp));
+    av_sha1_update(sha_ctx, (unsigned char*) temp, strlen(temp));
   }
 
-  sha_final(digest, &sha);
+  av_sha1_final(sha_ctx, digest);
+  free(sha_ctx);
 
-  base64 = rfc822_binary(digest, 20, &size);
-  base64[size] = 0;
+  av_base64_encode(base64, 39, digest, 20);
 
   _x_meta_info_set_utf8(this->stream, XINE_META_INFO_CDINDEX_DISCID, base64);
-
-  free (base64);
 }
 
 /*
@@ -1975,26 +1960,15 @@ static void _cdda_free_cddb_info(cdda_input_plugin_t *this) {
     int t;
 
     for(t = 0; t < this->cddb.num_tracks; t++) {
-      if(this->cddb.track[t].title)
-	free(this->cddb.track[t].title);
+      free(this->cddb.track[t].title);
     }
 
     free(this->cddb.track);
-    
-    if(this->cddb.cdiscid)
-      free(this->cddb.cdiscid);
-    
-    if(this->cddb.disc_title)
-      free(this->cddb.disc_title);
-    
-    if(this->cddb.disc_artist)
-      free(this->cddb.disc_artist);
-
-    if(this->cddb.disc_category)
-      free(this->cddb.disc_category);
-    
-    if(this->cddb.disc_year)
-      free(this->cddb.disc_year);
+    free(this->cddb.cdiscid);
+    free(this->cddb.disc_title);
+    free(this->cddb.disc_artist);
+    free(this->cddb.disc_category);
+    free(this->cddb.disc_year);
     
   }
 }
@@ -2227,7 +2201,7 @@ static uint32_t cdda_plugin_get_capabilities (input_plugin_t *this_gen) {
 }
 
 
-static off_t cdda_plugin_read (input_plugin_t *this_gen, char *buf, off_t len) {
+static off_t cdda_plugin_read (input_plugin_t *this_gen, void *buf, off_t len) {
 
   /* only allow reading in block-sized chunks */
 
@@ -2344,8 +2318,7 @@ static void cdda_plugin_dispose (input_plugin_t *this_gen ) {
 
   free(this->mrl);
 
-  if (this->cdda_device)
-    free(this->cdda_device);
+  free(this->cdda_device);
   if (this->class) {
     cdda_input_class_t *inp = (cdda_input_class_t *) this->class;
     inp->ip = NULL;
@@ -2579,7 +2552,7 @@ static input_plugin_t *cdda_class_get_instance (input_class_t *cls_gen, xine_str
   cdda_input_plugin_t *this;
   cdda_input_class_t  *class = (cdda_input_class_t *) cls_gen;
   int                  track;
-  xine_cfg_entry_t     enable_entry, server_entry, port_entry, cachedir_entry;
+  xine_cfg_entry_t     enable_entry, server_entry, port_entry;
   char                *cdda_device = NULL;
   int                  cddb_error = class->cddb_error;
 
@@ -2660,23 +2633,11 @@ static input_plugin_t *cdda_class_get_instance (input_class_t *cls_gen, xine_str
 			      &port_entry)) 
     port_changed_cb(class, &port_entry);
 
-  if(xine_config_lookup_entry(this->stream->xine, "media.audio_cd.cddb_cachedir", 
-			      &cachedir_entry)) 
-    cachedir_changed_cb(class, &cachedir_entry);
-
   class->cddb_error = cddb_error;
 
   return (input_plugin_t *)this;
 }
 
-
-static const char *cdda_class_get_identifier (input_class_t *this_gen) {
-  return "cdda";
-}
-
-static const char *cdda_class_get_description (input_class_t *this_gen) {
-  return _("CD Digital Audio (aka. CDDA)");
-}
 
 static void cdda_class_dispose (input_class_t *this_gen) {
   cdda_input_class_t  *this = (cdda_input_class_t *) this_gen;
@@ -2686,7 +2647,6 @@ static void cdda_class_dispose (input_class_t *this_gen) {
   config->unregister_callback(config, "media.audio_cd.use_cddb");
   config->unregister_callback(config, "media.audio_cd.cddb_server");
   config->unregister_callback(config, "media.audio_cd.cddb_port");
-  config->unregister_callback(config, "media.audio_cd.cddb_cachedir");
 #ifdef CDROM_SELECT_SPEED
   config->unregister_callback(config, "media.audio_cd.drive_slowdown");
 #endif
@@ -2714,8 +2674,8 @@ static void *init_plugin (xine_t *xine, void *data) {
   config       = xine->config;
 
   this->input_class.get_instance       = cdda_class_get_instance;
-  this->input_class.get_identifier     = cdda_class_get_identifier;
-  this->input_class.get_description    = cdda_class_get_description;
+  this->input_class.identifier         = "cdda";
+  this->input_class.description        = N_("CD Digital Audio (aka. CDDA)");
   /* this->input_class.get_dir            = cdda_class_get_dir; */
   this->input_class.get_dir            = NULL;
   this->input_class.get_autoplay_list  = cdda_class_get_autoplay_list;
@@ -2755,14 +2715,6 @@ static void *init_plugin (xine_t *xine, void *data) {
 		       "title and track information from."), XINE_CONFIG_SECURITY,
 		       port_changed_cb, (void *) this);
   
-  config->register_filename(config, "media.audio_cd.cddb_cachedir", 
-			  (_cdda_cddb_get_default_location()), XINE_CONFIG_STRING_IS_DIRECTORY_NAME,
-			  _("CDDB cache directory"), _("The replies from the CDDB server will be "
-			  "cached in this directory.\nThis setting is security critical, because files "
-			  "with uncontrollable names will be created in this directory. Be sure to use "
-			  "a dedicated directory not used for anything but CDDB caching."), XINE_CONFIG_SECURITY, 
-			  cachedir_changed_cb, (void *) this);
-
 #ifdef CDROM_SELECT_SPEED
   config->register_num(config, "media.audio_cd.drive_slowdown", 4,
 		       _("slow down disc drive to this speed factor"),
@@ -2783,7 +2735,7 @@ static void *init_plugin (xine_t *xine, void *data) {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */
-  { PLUGIN_INPUT | PLUGIN_MUST_PRELOAD, 17, "CD", XINE_VERSION_CODE, NULL, init_plugin },
+  { PLUGIN_INPUT | PLUGIN_MUST_PRELOAD, 18, "CD", XINE_VERSION_CODE, NULL, init_plugin },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };
 
