@@ -42,10 +42,10 @@
 /*
 #define LOG
 */
-#include "xine_internal.h"
-#include "xineutils.h"
-#include "demux.h"
-#include "buffer.h"
+#include <xine/xine_internal.h>
+#include <xine/xineutils.h>
+#include <xine/demux.h>
+#include <xine/buffer.h>
 #include "bswap.h"
 
 #include "ebml.h"
@@ -1179,7 +1179,7 @@ static int parse_track_entry(demux_matroska_t *this, matroska_track_t *track) {
       break;
         
       case MATROSKA_ID_TR_CODECPRIVATE: {
-        char *codec_private = malloc (elem.len);
+        uint8_t *codec_private = malloc (elem.len);
         lprintf("CodecPrivate\n");
         if (!ebml_read_binary(ebml, &elem, codec_private)) {
 	  free(codec_private);
@@ -1288,6 +1288,8 @@ static int parse_track_entry(demux_matroska_t *this, matroska_track_t *track) {
       _x_bmiheader_le2me(bih);
 
       track->buf_type = _x_fourcc_to_buf_video(bih->biCompression);
+      if (!track->buf_type)
+        _x_report_video_fourcc (this->stream->xine, LOG_MODULE, bih->biCompression);
       init_codec = init_codec_video;
 
     } else if (!strcmp(track->codec_id, MATROSKA_CODEC_ID_V_UNCOMPRESSED)) {
@@ -1398,6 +1400,8 @@ static int parse_track_entry(demux_matroska_t *this, matroska_track_t *track) {
       _x_waveformatex_le2me(wfh);
 
       track->buf_type = _x_formattag_to_buf_audio(wfh->wFormatTag);
+      if (!track->buf_type)
+        _x_report_audio_format_tag (this->stream->xine, LOG_MODULE, wfh->wFormatTag);
       init_codec = init_codec_audio;
     } else if (!strncmp(track->codec_id, MATROSKA_CODEC_ID_A_AAC,
                         sizeof(MATROSKA_CODEC_ID_A_AAC) - 1)) {
@@ -1645,10 +1649,10 @@ static int parse_cue_point(demux_matroska_t *this) {
       this->num_indexes++;
     }
     if ((index->num_entries % 1024) == 0) {
-      index->pos = (off_t *)realloc(index->pos, sizeof(off_t) *
-                                    (index->num_entries + 1024));
-      index->timecode = (off_t *)realloc(index->timecode, sizeof(uint64_t) *
-                                         (index->num_entries + 1024));
+      index->pos = realloc(index->pos, sizeof(off_t) *
+			   (index->num_entries + 1024));
+      index->timecode = realloc(index->timecode, sizeof(uint64_t) *
+				(index->num_entries + 1024));
     }
     index->pos[index->num_entries] = pos;
     index->timecode[index->num_entries] = timecode;
@@ -1734,10 +1738,7 @@ static int parse_tags(demux_matroska_t *this) {
 static void alloc_block_data (demux_matroska_t *this, int len) {
   /* memory management */
   if (this->block_data_size < len) {
-    if (this->block_data)
-      this->block_data = realloc(this->block_data, len);
-    else
-      this->block_data = malloc(len);
+    this->block_data = realloc(this->block_data, len);
     this->block_data_size = len;
   }
 }
@@ -2700,37 +2701,26 @@ static void demux_matroska_dispose (demux_plugin_t *this_gen) {
 
   /* free tracks */
   for (i = 0; i < this->num_tracks; i++) {
-    matroska_track_t *track;
+    matroska_track_t *const track = this->tracks[i];
 
-    track = this->tracks[i];
-    if (track->language)
-      free (track->language);
-    if (track->codec_id)
-      free (track->codec_id);
-    if (track->codec_private)
-      free (track->codec_private);
-    if (track->video_track)
-      free (track->video_track);
-    if (track->audio_track)
-      free (track->audio_track);
-    if (track->sub_track)
-      free (track->sub_track);
+    free (track->language);
+    free (track->codec_id);
+    free (track->codec_private);
+    free (track->video_track);
+    free (track->audio_track);
+    free (track->sub_track);
     
     free (track);
   }
   /* Free the cues. */
   for (i = 0; i < this->num_indexes; i++) {
-    if (this->indexes[i].pos)
-      free(this->indexes[i].pos);
-    if (this->indexes[i].timecode)
-      free(this->indexes[i].timecode);
+    free(this->indexes[i].pos);
+    free(this->indexes[i].timecode);
   }
-  if (this->indexes)
-    free(this->indexes);
+  free(this->indexes);
     
   /* Free the top_level elem list */    
-  if (this->top_level_list)
-    free(this->top_level_list);
+  free(this->top_level_list);
 
   dispose_ebml_parser(this->ebml);
   free (this);
@@ -2827,18 +2817,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
   }
   break;
 
-  case METHOD_BY_EXTENSION: {
-    const char *const mrl = input->get_mrl(input);
-    const char *const extensions = class_gen->get_extensions (class_gen);;
-
-    lprintf ("stage by extension %s\n", mrl);
-
-    if (!_x_demux_check_extension (mrl, extensions))
-      return NULL;
-
-  }
-  break;
-
+  case METHOD_BY_MRL:
   case METHOD_EXPLICIT:
   break;
 
@@ -2889,35 +2868,6 @@ error:
 /*
  * demux matroska class
  */
-
-static const char *get_description (demux_class_t *this_gen) {
-  return "matroska demux plugin";
-}
-
-
-static const char *get_identifier (demux_class_t *this_gen) {
-  return "matroska";
-}
-
-
-static const char *get_extensions (demux_class_t *this_gen) {
-  return "mkv";
-}
-
-
-static const char *get_mimetypes (demux_class_t *this_gen) {
-  return "video/mkv: mkv: matroska;"
-        "video/x-matroska: mkv: matroska;";
-}
-
-
-static void class_dispose (demux_class_t *this_gen) {
-
-  demux_matroska_class_t *this = (demux_matroska_class_t *) this_gen;
-
-  free (this);
-}
-
 static void *init_class (xine_t *xine, void *data) {
 
   demux_matroska_class_t     *this;
@@ -2926,11 +2876,12 @@ static void *init_class (xine_t *xine, void *data) {
   this->xine   = xine;
 
   this->demux_class.open_plugin     = open_plugin;
-  this->demux_class.get_description = get_description;
-  this->demux_class.get_identifier  = get_identifier;
-  this->demux_class.get_mimetypes   = get_mimetypes;
-  this->demux_class.get_extensions  = get_extensions;
-  this->demux_class.dispose         = class_dispose;
+  this->demux_class.description     = N_("matroska demux plugin");
+  this->demux_class.identifier      = "matroska";
+  this->demux_class.mimetypes       = "video/mkv: mkv: matroska;"
+                                      "video/x-matroska: mkv: matroska;";
+  this->demux_class.extensions      = "mkv";
+  this->demux_class.dispose         = default_demux_class_dispose;
 
   return this;
 }
@@ -2944,6 +2895,6 @@ static const demuxer_info_t demux_info_matroska = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */
-  { PLUGIN_DEMUX, 26, "matroska", XINE_VERSION_CODE, &demux_info_matroska, init_class },
+  { PLUGIN_DEMUX, 27, "matroska", XINE_VERSION_CODE, &demux_info_matroska, init_class },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };
