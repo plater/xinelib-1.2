@@ -22,7 +22,6 @@
  
 #ifdef HAVE_CONFIG_H
 #include "config.h"
-#include "../../libffmpeg/ffmpeg_config.h"
 #endif
 
 #include <stdlib.h>
@@ -38,9 +37,9 @@
 #define LOG
 */
 
-#include "xine_internal.h"
-#include "buffer.h"
-#include "xineutils.h"
+#include <xine/xine_internal.h>
+#include <xine/buffer.h>
+#include <xine/xineutils.h>
 #include "bswap.h"
 #include "ffmpeg_decoder.h"
 
@@ -470,18 +469,6 @@ static audio_decoder_t *ff_audio_open_plugin (audio_decoder_class_t *class_gen, 
   return &this->audio_decoder;
 }
 
-static char *ff_audio_get_identifier (audio_decoder_class_t *this) {
-  return "ffmpeg audio";
-}
-
-static char *ff_audio_get_description (audio_decoder_class_t *this) {
-  return "ffmpeg based audio decoder plugin";
-}
-
-static void ff_audio_dispose_class (audio_decoder_class_t *this) {
-  free (this);
-}
-
 void *init_audio_plugin (xine_t *xine, void *data) {
 
   ff_audio_class_t *this ;
@@ -489,115 +476,49 @@ void *init_audio_plugin (xine_t *xine, void *data) {
   this = calloc(1, sizeof (ff_audio_class_t));
 
   this->decoder_class.open_plugin     = ff_audio_open_plugin;
-  this->decoder_class.get_identifier  = ff_audio_get_identifier;
-  this->decoder_class.get_description = ff_audio_get_description;
-  this->decoder_class.dispose         = ff_audio_dispose_class;
+  this->decoder_class.identifier      = "ffmpeg audio";
+  this->decoder_class.description     = N_("ffmpeg based audio decoder plugin");
+  this->decoder_class.dispose         = default_audio_decoder_class_dispose;
 
   pthread_once( &once_control, init_once_routine );
 
   return this;
 }
 
-static uint32_t supported_audio_types[] = { 
-  #ifdef CONFIG_WMAV1_DECODER
+static const uint32_t supported_audio_types[] = { 
   BUF_AUDIO_WMAV1,
-  #endif
-  #ifdef CONFIG_WMAV2_DECODER
   BUF_AUDIO_WMAV2,
-  #endif
-  #ifdef CONFIG_RA_144_DECODER
   BUF_AUDIO_14_4,
-  #endif
-  #ifdef CONFIG_RA_288_DECODER
   BUF_AUDIO_28_8,
-  #endif
-  #ifdef CONFIG_MP3_DECODER
   BUF_AUDIO_MPEG,
-  #endif
-  #ifdef CONFIG_ADPCM_MS_DECODER
   BUF_AUDIO_MSADPCM,
-  #endif
-  #ifdef CONFIG_ADPCM_IMA_QT_DECODER
   BUF_AUDIO_QTIMAADPCM,
-  #endif
-  #ifdef CONFIG_ADPCM_IMA_WAV_DECODER
   BUF_AUDIO_MSIMAADPCM,
-  #endif
-  #ifdef CONFIG_ADPCM_IMA_DK3_DECODER
   BUF_AUDIO_DK3ADPCM,
-  #endif
-  #ifdef CONFIG_ADPCM_IMA_DK4_DECODER
   BUF_AUDIO_DK4ADPCM,
-  #endif
-  #ifdef CONFIG_ADPCM_IMA_WS_DECODER
   BUF_AUDIO_VQA_IMA,
-  #endif
-  #ifdef CONFIG_ADPCM_IMA_SMJPEG_DECODER
   BUF_AUDIO_SMJPEG_IMA,
-  #endif
-  #ifdef CONFIG_ADPCM_XA_DECODER
   BUF_AUDIO_XA_ADPCM,
-  #endif
-  #ifdef CONFIG_ADPCM_4XM_DECODER
   BUF_AUDIO_4X_ADPCM,
-  #endif
-  #ifdef CONFIG_ADPCM_EA_DECODER
   BUF_AUDIO_EA_ADPCM,
-  #endif
-  #ifdef CONFIG_PCM_MULAW_DECODER
   BUF_AUDIO_MULAW,
-  #endif
-  #ifdef CONFIG_PCM_ALAW_DECODER
   BUF_AUDIO_ALAW,
-  #endif
-  #ifdef CONFIG_ROQ_DPCM_DECODER
   BUF_AUDIO_ROQ,
-  #endif
-  #ifdef CONFIG_INTERPLAY_DPCM_DECODER
   BUF_AUDIO_INTERPLAY,
-  #endif
-  #ifdef CONFIG_MACE3_DECODER
   BUF_AUDIO_MAC3,
-  #endif
-  #ifdef CONFIG_MACE6_DECODER
   BUF_AUDIO_MAC6,
-  #endif
-  #ifdef CONFIG_XAN_DPCM_DECODER
   BUF_AUDIO_XAN_DPCM,
-  #endif
-  #ifdef CONFIG_VMDAUDIO_DECODER
   BUF_AUDIO_VMD,
-  #endif
-  #ifdef CONFIG_FLAC_DECODER
   BUF_AUDIO_FLAC,
-  #endif
-  #ifdef CONFIG_SHORTEN_DECODER
   BUF_AUDIO_SHORTEN,
-  #endif
-  #ifdef CONFIG_ALAC_DECODER
   BUF_AUDIO_ALAC,
-  #endif
-  #ifdef CONFIG_QDM2_DECODER
   BUF_AUDIO_QDESIGN2,
-  #endif
-  #ifdef CONFIG_COOK_DECODER
   BUF_AUDIO_COOK,
-  #endif
-  #ifdef CONFIG_TRUESPEECH_DECODER
   BUF_AUDIO_TRUESPEECH,
-  #endif
-  #ifdef CONFIG_TTA_DECODER
   BUF_AUDIO_TTA,
-  #endif
-  #ifdef CONFIG_SMACKAUDIO_DECODER
   BUF_AUDIO_SMACKER,
-  #endif
-  #ifdef CONFIG_ADPCM_SWF_DECODER
   BUF_AUDIO_FLVADPCM,
-  #endif
-  #ifdef CONFIG_WAVPACK_DECODER
   BUF_AUDIO_WAVPACK,
-  #endif
   
   0
 };
