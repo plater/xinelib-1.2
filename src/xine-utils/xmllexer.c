@@ -26,11 +26,11 @@
 */
 
 #ifdef XINE_COMPILE
-#include "xineutils.h"
+#include <xine/xineutils.h>
 #else
 #define lprintf(...)
 #endif
-#include "xmllexer.h"
+#include <xine/xmllexer.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
@@ -42,14 +42,11 @@
 #include "bswap.h"
 
 /* private constants*/
-#define NORMAL       0  /* normal lex mode */
-#define DATA         1  /* data lex mode */
 
 /* private global variables */
 static const char * lexbuf;
 static int lexbuf_size = 0;
 static int lexbuf_pos  = 0;
-static int lex_mode    = NORMAL;
 static int in_comment  = 0;
 static char *lex_malloc = NULL;
 
@@ -91,6 +88,12 @@ static void lex_convert (const char * buf, int size, enum utf utf)
   lexbuf = lex_malloc = realloc (utf8, lexbuf_size + 1);
 }
 
+static enum {
+  NORMAL,
+  DATA,
+  CDATA,
+} lex_mode = NORMAL;
+
 void lexer_init(const char * buf, int size) {
   static const char boms[] = { 0xFF, 0xFE, 0, 0, 0xFE, 0xFF },
 		    bom_utf8[] = { 0xEF, 0xBB, 0xBF };
@@ -122,86 +125,104 @@ void lexer_init(const char * buf, int size) {
   lprintf("buffer length %d\n", size);
 }
 
+typedef enum {
+  STATE_UNKNOWN = -1,
+  STATE_IDLE,
+  STATE_EOL,
+  STATE_SEPAR,
+  STATE_T_M_START,
+  STATE_T_M_STOP_1,
+  STATE_T_M_STOP_2,
+  STATE_T_EQUAL,
+  STATE_T_STRING_SINGLE,
+  STATE_T_STRING_DOUBLE,
+  STATE_T_COMMENT,
+  STATE_T_TI_STOP,
+  STATE_T_DASHDASH,
+  STATE_T_C_STOP,
+  STATE_IDENT /* must be last */
+} lexer_state_t;
+
 int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
   char *tok = *_tok;
   int tok_size = *_tok_size;
-
   int tok_pos = 0;
-  int state = 0;
+  lexer_state_t state = STATE_IDLE;
   char c;
 
   if (tok) {
     while ((tok_pos < tok_size) && (lexbuf_pos < lexbuf_size)) {
       c = lexbuf[lexbuf_pos];
-      lprintf("c=%c, state=%d, in_comment=%d\n", c, state, in_comment);
+      lprintf("c=%c, state=%d, lex_mode=%d, in_comment=%d\n", c, state, lex_mode, in_comment);
 
-      if (lex_mode == NORMAL) {
-				/* normal mode */
+      switch (lex_mode) {
+      case NORMAL:
 	switch (state) {
 	  /* init state */
-	case 0:
+	case STATE_IDLE:
 	  switch (c) {
 	  case '\n':
 	  case '\r':
-	    state = 1;
+	    state = STATE_EOL;
 	    tok[tok_pos] = c;
 	    tok_pos++;
 	    break;
 
 	  case ' ':
 	  case '\t':
-	    state = 2;
+	    state = STATE_SEPAR;
 	    tok[tok_pos] = c;
 	    tok_pos++;
 	    break;
 
 	  case '<':
-	    state = 3;
+	    state = STATE_T_M_START;
 	    tok[tok_pos] = c;
 	    tok_pos++;
 	    break;
 
 	  case '>':
-	    state = 4;
+	    state = STATE_T_M_STOP_1;
 	    tok[tok_pos] = c;
 	    tok_pos++;
 	    break;
 
 	  case '/':
 	    if (!in_comment) 
-	      state = 5;
+	      state = STATE_T_M_STOP_2;
 	    tok[tok_pos] = c;
 	    tok_pos++;
 	    break;
 
 	  case '=':
-	    state = 6;
+	    state = STATE_T_EQUAL;
 	    tok[tok_pos] = c;
 	    tok_pos++;
 	    break;
 
 	  case '\"': /* " */
-	    state = 7;
+	    state = STATE_T_STRING_DOUBLE;
 	    break;
 
 	  case '\'': /* " */
-	    state = 12;
+	    state = STATE_T_STRING_SINGLE;
 	    break;
 
 	  case '-':
-	    state = 10;
+	    state = STATE_T_DASHDASH;
 	    tok[tok_pos] = c;
 	    tok_pos++;
 	    break;
 
 	  case '?':
-	    state = 9;
+	    if (!in_comment)
+	      state = STATE_T_TI_STOP;
 	    tok[tok_pos] = c;
 	    tok_pos++;
 	    break;
 
 	  default:
-	    state = 100;
+	    state = STATE_IDENT;
 	    tok[tok_pos] = c;
 	    tok_pos++;
 	    break;
@@ -210,7 +231,7 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	  break;
 
 	  /* end of line */
-	case 1:
+	case STATE_EOL:
 	  if (c == '\n' || (c == '\r')) {
 	    tok[tok_pos] = c;
 	    lexbuf_pos++;
@@ -222,7 +243,7 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	  break;
 
 	  /* T_SEPAR */
-	case 2:
+	case STATE_SEPAR:
 	  if (c == ' ' || (c == '\t')) {
 	    tok[tok_pos] = c;
 	    lexbuf_pos++;
@@ -234,7 +255,7 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	  break;
 
 	  /* T_M_START < or </ or <! or <? */
-	case 3:
+	case STATE_T_M_START:
 	  switch (c) {
 	  case '/':
 	    tok[tok_pos] = c;
@@ -247,7 +268,7 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	    tok[tok_pos] = c;
 	    lexbuf_pos++;
 	    tok_pos++;
-	    state = 8;
+	    state = STATE_T_COMMENT;
 	    break;
 	  case '?':
 	    tok[tok_pos] = c;
@@ -263,7 +284,7 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	  break;
 
 	  /* T_M_STOP_1 */
-	case 4:
+	case STATE_T_M_STOP_1:
 	  tok[tok_pos] = '\0';
 	  if (!in_comment)
 	    lex_mode = DATA;
@@ -271,7 +292,7 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	  break;
 
 	  /* T_M_STOP_2 */
-	case 5:
+	case STATE_T_M_STOP_2:
 	  if (c == '>') {
 	    tok[tok_pos] = c;
 	    lexbuf_pos++;
@@ -287,13 +308,13 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	  break;
 
 	  /* T_EQUAL */
-	case 6:
+	case STATE_T_EQUAL:
 	  tok[tok_pos] = '\0';
 	  return T_EQUAL;
 	  break;
 
 	  /* T_STRING */
-	case 7:
+	case STATE_T_STRING_DOUBLE:
 	  tok[tok_pos] = c;
 	  lexbuf_pos++;
 	  if (c == '\"') { /* " */
@@ -303,8 +324,8 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	  tok_pos++;
 	  break;
 
-	  /* T_C_START or T_DOCTYPE_START */
-	case 8:
+	  /* T_C_START or T_DOCTYPE_START or T_CDATA_START */
+	case STATE_T_COMMENT:
 	  switch (c) {
 	  case '-':
 	    lexbuf_pos++;
@@ -328,6 +349,17 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	      return T_ERROR;
 	    }
 	    break;
+	  case '[':
+	    lexbuf_pos++;
+	    if (strncmp(lexbuf + lexbuf_pos, "CDATA[", 6) == 0) {
+	      strncpy (tok + tok_pos, "[CDATA[", 7); /* FIXME */
+	      lexbuf_pos += 6;
+	      lex_mode = CDATA;
+	      return T_CDATA_START;
+	    } else{
+	      return T_ERROR;
+	    }
+	    break;
 	  default:
 	    /* error */
 	    return T_ERROR;
@@ -335,12 +367,14 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	  break;
 
 	  /* T_TI_STOP */
-	case 9:
+	case STATE_T_TI_STOP:
 	  if (c == '>') {
 	    tok[tok_pos] = c;
 	    lexbuf_pos++;
 	    tok_pos++; /* FIXME */
 	    tok[tok_pos] = '\0';
+	    if (!in_comment)
+	      lex_mode = DATA;
 	    return T_TI_STOP;
 	  } else {
 	    tok[tok_pos] = '\0';
@@ -349,24 +383,24 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	  break;
 
 	  /* -- */
-	case 10:
+	case STATE_T_DASHDASH:
 	  switch (c) {
 	  case '-':
 	    tok[tok_pos] = c;
 	    tok_pos++;
 	    lexbuf_pos++;
-	    state = 11;
+	    state = STATE_T_C_STOP;
 	    break;
 	  default:
 	    tok[tok_pos] = c;
 	    tok_pos++;
 	    lexbuf_pos++;
-	    state = 100;
+	    state = STATE_IDENT;
 	  }
 	  break;
 
 	  /* --> */
-	case 11:
+	case STATE_T_C_STOP:
 	  switch (c) {
 	  case '>':
 	    tok[tok_pos] = c;
@@ -386,12 +420,12 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	    tok[tok_pos] = c;
 	    tok_pos++;
 	    lexbuf_pos++;
-	    state = 100;
+	    state = STATE_IDENT;
 	  }
 	  break;
 
 	  /* T_STRING (single quotes) */
-	case 12:
+	case STATE_T_STRING_SINGLE:
 	  tok[tok_pos] = c;
 	  lexbuf_pos++;
 	  if (c == '\'') { /* " */
@@ -402,7 +436,7 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	  break;
 
 	  /* IDENT */
-	case 100:
+	case STATE_IDENT:
 	  switch (c) {
 	  case '<':
 	  case '>':
@@ -421,13 +455,13 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	    tok[tok_pos] = c;
 	    tok_pos++;
 	    lexbuf_pos++;
-	    state = 9;
+	    state = STATE_T_TI_STOP;
 	    break;
 	  case '-':
 	    tok[tok_pos] = c;
 	    tok_pos++;
 	    lexbuf_pos++;
-	    state = 10;
+	    state = STATE_T_DASHDASH;
 	    break;
 	  default:
 	    tok[tok_pos] = c;
@@ -439,8 +473,9 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	  lprintf("expected char \'%c\'\n", tok[tok_pos - 1]); /* FIX ME */
 	  return T_ERROR;
 	}
-      } else {
-				/* data mode, stop if char equal '<' */
+	break;
+
+      case DATA:		/* data mode, stop if char equal '<' */
         switch (c)
         {
         case '<':
@@ -452,6 +487,28 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 	  tok_pos++;
 	  lexbuf_pos++;
 	}
+	break;
+
+      case CDATA:		/* cdata mode, stop if next token is "]]>" */
+        switch (c)
+        {
+	case ']':
+	  if (strncmp(lexbuf + lexbuf_pos, "]]>", 3) == 0) {
+	    lexbuf_pos += 3;
+	    lex_mode = DATA;
+	    return T_CDATA_STOP;
+	  } else {
+	    tok[tok_pos] = c;
+	    tok_pos++;
+	    lexbuf_pos++;
+	  }
+	  break;
+	default:
+	  tok[tok_pos] = c;
+	  tok_pos++;
+	  lexbuf_pos++;
+	}
+	break;
       }
     }
     lprintf ("loop done tok_pos = %d, tok_size=%d, lexbuf_pos=%d, lexbuf_size=%d\n", 
@@ -475,27 +532,28 @@ int lexer_get_token_d(char ** _tok, int * _tok_size, int fixed) {
 				/* Terminate the current token */
 	tok[tok_pos] = '\0';
 	switch (state) {
-	case 0:
-	case 1:
-	case 2:
+	case STATE_IDLE:
+	case STATE_EOL:
+	case STATE_SEPAR:
 	  return T_EOF;
 	  break;
-	case 3:
+	case STATE_T_M_START:
 	  return T_M_START_1;
 	  break;
-	case 4:
+	case STATE_T_M_STOP_1:
 	  return T_M_STOP_1;
 	  break;
-	case 5:
+	case STATE_T_M_STOP_2:
 	  return T_ERROR;
 	  break;
-	case 6:
+	case STATE_T_EQUAL:
 	  return T_EQUAL;
 	  break;
-	case 7:
+	case STATE_T_STRING_SINGLE:
+	case STATE_T_STRING_DOUBLE:
 	  return T_STRING;
 	  break;
-	case 100:
+	case STATE_IDENT:
 	  return T_DATA;
 	  break;
 	default:
