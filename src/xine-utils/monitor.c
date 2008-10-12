@@ -26,7 +26,7 @@
 
 #include <stdio.h>
 #include <sys/time.h>
-#include "xineutils.h"
+#include <xine/xineutils.h>
 
 #define MAX_ID 10
 
@@ -38,7 +38,6 @@ static long profiler_calls[MAX_ID] ;
 static const char *profiler_label[MAX_ID] ;
 
 void xine_profiler_init () {
-  int i;
   memset(profiler_times, 0, sizeof(profiler_times));
   memset(profiler_start, 0, sizeof(profiler_start));
   memset(profiler_calls, 0, sizeof(profiler_calls));
