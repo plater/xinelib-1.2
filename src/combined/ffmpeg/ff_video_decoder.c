@@ -22,7 +22,6 @@
  
 #ifdef HAVE_CONFIG_H
 #include "config.h"
-#include "../../libffmpeg/ffmpeg_config.h"
 #endif
 
 #include <stdlib.h>
@@ -38,10 +37,10 @@
 /*
 #define LOG
 */
-#include "xine_internal.h"
+#include <xine/xine_internal.h>
 #include "bswap.h"
-#include "buffer.h"
-#include "xineutils.h"
+#include <xine/buffer.h>
+#include <xine/xineutils.h>
 #include "ffmpeg_decoder.h"
 #include "ff_mpeg_parser.h"
 
@@ -57,12 +56,6 @@
 #define SLICE_OFFSET_SIZE   128
 
 #define ENABLE_DIRECT_RENDERING
-
-/* reordered_opaque appeared in libavcodec 51.68.0 */
-#define AVCODEC_HAS_REORDERED_OPAQUE
-#if LIBAVCODEC_VERSION_INT < 0x334400
-# undef AVCODEC_HAS_REORDERED_OPAQUE
-#endif
 
 typedef struct ff_video_decoder_s ff_video_decoder_t;
 
@@ -84,12 +77,10 @@ struct ff_video_decoder_s {
 
   xine_stream_t    *stream;
   int64_t           pts;
-#ifdef AVCODEC_HAS_REORDERED_OPAQUE
   uint64_t          pts_tag_mask;
   uint64_t          pts_tag;
   int               pts_tag_counter;
   int               pts_tag_stable_counter;
-#endif /* AVCODEC_HAS_REORDERED_OPAQUE */
   int               video_step;
 
   uint8_t           decoder_ok:1;
@@ -1190,7 +1181,6 @@ static void ff_handle_mpeg12_buffer (ff_video_decoder_t *this, buf_element_t *bu
   }
 }
 
-#ifdef AVCODEC_HAS_REORDERED_OPAQUE
 static uint64_t ff_tag_pts(ff_video_decoder_t *this, uint64_t pts)
 {
   return pts | this->pts_tag;
@@ -1237,7 +1227,6 @@ static void ff_check_pts_tagging(ff_video_decoder_t *this, uint64_t pts)
   }
 }
 
-#endif /* AVCODEC_HAS_REORDERED_OPAQUE */
 static void ff_handle_buffer (ff_video_decoder_t *this, buf_element_t *buf) {
   uint8_t *chunk_buf = this->buf;
   AVRational avr00 = {0, 1};
@@ -1262,14 +1251,12 @@ static void ff_handle_buffer (ff_video_decoder_t *this, buf_element_t *buf) {
     this->size = 0;
   }
 
-#ifdef AVCODEC_HAS_REORDERED_OPAQUE
   if (this->size == 0) {
     /* take over pts when we are about to buffer a frame */
     this->av_frame->reordered_opaque = ff_tag_pts(this, this->pts);
     this->context->reordered_opaque = ff_tag_pts(this, this->pts);
     this->pts = 0;
   }
-#endif /* AVCODEC_HAS_REORDERED_OPAQUE */
 
   /* data accumulation */
   if (buf->size > 0) {
@@ -1324,10 +1311,8 @@ static void ff_handle_buffer (ff_video_decoder_t *this, buf_element_t *buf) {
                                     &got_picture, &chunk_buf[offset],
                                     this->size);
 
-#ifdef AVCODEC_HAS_REORDERED_OPAQUE
         /* reset consumed pts value */
         this->context->reordered_opaque = ff_tag_pts(this, 0);
-#endif /* AVCODEC_HAS_REORDERED_OPAQUE */
 
         lprintf("consumed size: %d, got_picture: %d\n", len, got_picture);
         if ((len <= 0) || (len > this->size)) {
@@ -1345,12 +1330,10 @@ static void ff_handle_buffer (ff_video_decoder_t *this, buf_element_t *buf) {
             memmove (this->buf, &chunk_buf[offset], this->size);
             chunk_buf = this->buf;
 
-#ifdef AVCODEC_HAS_REORDERED_OPAQUE
             /* take over pts for next access unit */
             this->av_frame->reordered_opaque = ff_tag_pts(this, this->pts);
             this->context->reordered_opaque = ff_tag_pts(this, this->pts);
             this->pts = 0;
-#endif /* AVCODEC_HAS_REORDERED_OPAQUE */
           }
         }
       }
@@ -1445,14 +1428,9 @@ static void ff_handle_buffer (ff_video_decoder_t *this, buf_element_t *buf) {
           ff_convert_frame(this, img);
         }
 
-#ifndef AVCODEC_HAS_REORDERED_OPAQUE
-        img->pts  = this->pts;
-        this->pts = 0;
-#else /* AVCODEC_HAS_REORDERED_OPAQUE */
         img->pts  = ff_untag_pts(this, this->av_frame->reordered_opaque);
         ff_check_pts_tagging(this, this->av_frame->reordered_opaque); /* only check for valid frames */
         this->av_frame->reordered_opaque = 0;
-#endif /* AVCODEC_HAS_REORDERED_OPAQUE */
 
         /* workaround for weird 120fps streams */
         if( video_step_to_use == 750 ) {
@@ -1492,13 +1470,8 @@ static void ff_handle_buffer (ff_video_decoder_t *this, buf_element_t *buf) {
                                                 this->output_format,
                                                 VO_BOTH_FIELDS|this->frame_flags);
       /* set PTS to allow early syncing */
-#ifndef AVCODEC_HAS_REORDERED_OPAQUE
-      img->pts       = this->pts;
-      this->pts      = 0;
-#else /* AVCODEC_HAS_REORDERED_OPAQUE */
       img->pts       = ff_untag_pts(this, this->av_frame->reordered_opaque);
       this->av_frame->reordered_opaque = 0;
-#endif /* AVCODEC_HAS_REORDERED_OPAQUE */
 
       img->duration  = video_step_to_use;
 
@@ -1584,12 +1557,10 @@ static void ff_reset (video_decoder_t *this_gen) {
   if (this->is_mpeg12)
     mpeg_parser_reset(this->mpeg_parser);
 
-#ifdef AVCODEC_HAS_REORDERED_OPAQUE
   this->pts_tag_mask = 0;
   this->pts_tag = 0;
   this->pts_tag_counter = 0;
   this->pts_tag_stable_counter = 0;
-#endif /* AVCODEC_HAS_REORDERED_OPAQUE */
 }
 
 static void ff_discontinuity (video_decoder_t *this_gen) {
@@ -1598,7 +1569,6 @@ static void ff_discontinuity (video_decoder_t *this_gen) {
   lprintf ("ff_discontinuity\n");
   this->pts = 0;
 
-#ifdef AVCODEC_HAS_REORDERED_OPAQUE
   /*
    * there is currently no way to reset all the pts which are stored in the decoder.
    * therefore, we add a unique tag (generated from pts_tag_counter) to pts (see 
@@ -1631,7 +1601,6 @@ static void ff_discontinuity (video_decoder_t *this_gen) {
       counter_mask <<= 1;
     }
   }
-#endif /* AVCODEC_HAS_REORDERED_OPAQUE */
 }
 
 static void ff_dispose (video_decoder_t *this_gen) {
@@ -1737,18 +1706,6 @@ static video_decoder_t *ff_video_open_plugin (video_decoder_class_t *class_gen, 
   return &this->video_decoder;
 }
 
-static char *ff_video_get_identifier (video_decoder_class_t *this) {
-  return "ffmpeg video";
-}
-
-static char *ff_video_get_description (video_decoder_class_t *this) {
-  return "ffmpeg based video decoder plugin";
-}
-
-static void ff_video_dispose_class (video_decoder_class_t *this) {
-  free (this);
-}
-
 void *init_video_plugin (xine_t *xine, void *data) {
 
   ff_video_class_t *this;
@@ -1757,9 +1714,9 @@ void *init_video_plugin (xine_t *xine, void *data) {
   this = calloc(1, sizeof (ff_video_class_t));
 
   this->decoder_class.open_plugin     = ff_video_open_plugin;
-  this->decoder_class.get_identifier  = ff_video_get_identifier;
-  this->decoder_class.get_description = ff_video_get_description;
-  this->decoder_class.dispose         = ff_video_dispose_class;
+  this->decoder_class.identifier      = "ffmpeg video";
+  this->decoder_class.description     = N_("ffmpeg based video decoder plugin");
+  this->decoder_class.dispose         = default_video_decoder_class_dispose;
   this->xine                          = xine;
 
   pthread_once( &once_control, init_once_routine );
@@ -1808,243 +1765,93 @@ void *init_video_plugin (xine_t *xine, void *data) {
   return this;
 }
 
-static uint32_t supported_video_types[] = { 
-  #ifdef CONFIG_MSMPEG4V1_DECODER
+static const uint32_t supported_video_types[] = { 
   BUF_VIDEO_MSMPEG4_V1,
-  #endif
-  #ifdef CONFIG_MSMPEG4V2_DECODER
   BUF_VIDEO_MSMPEG4_V2,
-  #endif
-  #ifdef CONFIG_MSMPEG4V3_DECODER
   BUF_VIDEO_MSMPEG4_V3,
-  #endif
-  #ifdef CONFIG_WMV1_DECODER
   BUF_VIDEO_WMV7,
-  #endif
-  #ifdef CONFIG_WMV2_DECODER
   BUF_VIDEO_WMV8,
-  #endif
-  #ifdef CONFIG_WMV3_DECODER
   BUF_VIDEO_WMV9,
-  #endif
-  #ifdef CONFIG_VC1_DECODER
   BUF_VIDEO_VC1,
-  #endif
-  #ifdef CONFIG_MPEG4_DECODER
   BUF_VIDEO_MPEG4,
-  #endif
-  #ifdef CONFIG_MPEG4_DECODER
   BUF_VIDEO_XVID,
-  #endif
-  #ifdef CONFIG_MPEG4_DECODER
   BUF_VIDEO_DIVX5,
-  #endif
-  #ifdef CONFIG_MPEG4_DECODER
   BUF_VIDEO_3IVX,
-  #endif
-  #ifdef CONFIG_MJPEG_DECODER
   BUF_VIDEO_JPEG,
-  #endif
-  #ifdef CONFIG_MJPEG_DECODER
   BUF_VIDEO_MJPEG,
-  #endif
-  #ifdef CONFIG_MJPEGB_DECODER
   BUF_VIDEO_MJPEG_B,
-  #endif
-  #ifdef CONFIG_H263I_DECODER
   BUF_VIDEO_I263,
-  #endif
-  #ifdef CONFIG_H263_DECODER
   BUF_VIDEO_H263,
-  #endif
-  #ifdef CONFIG_RV10_DECODER
   BUF_VIDEO_RV10,
-  #endif
-  #ifdef CONFIG_RV20_DECODER
   BUF_VIDEO_RV20,
-  #endif
-  #ifdef CONFIG_INDEO3_DECODER
   BUF_VIDEO_IV31,
-  #endif
-  #ifdef CONFIG_INDEO3_DECODER
   BUF_VIDEO_IV32,
-  #endif
-  #ifdef CONFIG_SVQ1_DECODER
   BUF_VIDEO_SORENSON_V1,
-  #endif
-  #ifdef CONFIG_SVQ3_DECODER
   BUF_VIDEO_SORENSON_V3,
-  #endif
-  #ifdef CONFIG_DVVIDEO_DECODER
   BUF_VIDEO_DV,
-  #endif
-  #ifdef CONFIG_HUFFYUV_DECODER
   BUF_VIDEO_HUFFYUV,
-  #endif
-  #ifdef CONFIG_VP3_DECODER
   BUF_VIDEO_VP31,
-  #endif
-  #ifdef CONFIG_VP5_DECODER
   BUF_VIDEO_VP5,
-  #endif
-  #ifdef CONFIG_VP6_DECODER
   BUF_VIDEO_VP6,
   BUF_VIDEO_VP6F,
-  #endif
-  #ifdef CONFIG_4XM_DECODER
   BUF_VIDEO_4XM,
-  #endif
-  #ifdef CONFIG_CINEPAK_DECODER
   BUF_VIDEO_CINEPAK,
-  #endif
-  #ifdef CONFIG_MSVIDEO1_DECODER
   BUF_VIDEO_MSVC,
-  #endif
-  #ifdef CONFIG_MSRLE_DECODER
   BUF_VIDEO_MSRLE,
-  #endif
-  #ifdef CONFIG_RPZA_DECODER
   BUF_VIDEO_RPZA,
-  #endif
-  #ifdef CONFIG_CYUV_DECODER
   BUF_VIDEO_CYUV,
-  #endif
-  #ifdef CONFIG_ROQ_DECODER
   BUF_VIDEO_ROQ,
-  #endif
-  #ifdef CONFIG_IDCIN_DECODER
   BUF_VIDEO_IDCIN,
-  #endif
-  #ifdef CONFIG_XAN_WC3_DECODER
   BUF_VIDEO_WC3,
-  #endif
-  #ifdef CONFIG_WS_VQA_DECODER
   BUF_VIDEO_VQA,
-  #endif
-  #ifdef CONFIG_INTERPLAY_VIDEO_DECODER
   BUF_VIDEO_INTERPLAY,
-  #endif
-  #ifdef CONFIG_FLIC_DECODER
   BUF_VIDEO_FLI,
-  #endif
-  #ifdef CONFIG_8BPS_DECODER
   BUF_VIDEO_8BPS,
-  #endif
-  #ifdef CONFIG_SMC_DECODER
   BUF_VIDEO_SMC,
-  #endif
-  #ifdef CONFIG_TRUEMOTION1_DECODER
   BUF_VIDEO_DUCKTM1,
-  #endif
-  #ifdef CONFIG_TRUEMOTION2_DECODER
   BUF_VIDEO_DUCKTM2,
-  #endif
-  #ifdef CONFIG_VMDVIDEO_DECODER
   BUF_VIDEO_VMD,
-  #endif
-  #ifdef CONFIG_ZLIB_DECODER
   BUF_VIDEO_ZLIB,
-  #endif
-  #ifdef CONFIG_MSZH_DECODER
   BUF_VIDEO_MSZH,
-  #endif
-  #ifdef CONFIG_ASV1_DECODER
   BUF_VIDEO_ASV1,
-  #endif
-  #ifdef CONFIG_ASV2_DECODER
   BUF_VIDEO_ASV2,
-  #endif
-  #ifdef CONFIG_VCR1_DECODER
   BUF_VIDEO_ATIVCR1,
-  #endif
-  #ifdef CONFIG_FLV_DECODER
   BUF_VIDEO_FLV1,
-  #endif
-  #ifdef CONFIG_QTRLE_DECODER
   BUF_VIDEO_QTRLE,
-  #endif
-  #ifdef CONFIG_H264_DECODER
   BUF_VIDEO_H264,
-  #endif
-  #ifdef CONFIG_H261_DECODER
   BUF_VIDEO_H261,
-  #endif
-  #ifdef CONFIG_AASC_DECODER
   BUF_VIDEO_AASC,
-  #endif
-  #ifdef CONFIG_LOCO_DECODER
   BUF_VIDEO_LOCO,
-  #endif
-  #ifdef CONFIG_QDRAW_DECODER
   BUF_VIDEO_QDRW,
-  #endif
-  #ifdef CONFIG_QPEG_DECODER
   BUF_VIDEO_QPEG,
-  #endif
-  #ifdef CONFIG_TSCC_DECODER
   BUF_VIDEO_TSCC,
-  #endif
-  #ifdef CONFIG_ULTI_DECODER
   BUF_VIDEO_ULTI,
-  #endif
-  #ifdef CONFIG_WNV1_DECODER
   BUF_VIDEO_WNV1,
-  #endif
-  #ifdef CONFIG_VIXL_DECODER
   BUF_VIDEO_XL,
-  #endif
-  #ifdef CONFIG_INDEO2_DECODER
   BUF_VIDEO_RT21,
-  #endif
-  #ifdef CONFIG_FRAPS_DECODER
   BUF_VIDEO_FPS1,
-  #endif
-  #ifdef CONFIG_MPEG1VIDEO_DECODER
   BUF_VIDEO_MPEG,
-  #endif
-  #ifdef CONFIG_CSCD_DECODER
   BUF_VIDEO_CSCD,
-  #endif
-  #ifdef CONFIG_AVS_DECODER
   BUF_VIDEO_AVS,
-  #endif
-  #ifdef CONFIG_MMVIDEO_DECODER
   BUF_VIDEO_ALGMM,
-  #endif
-  #ifdef CONFIG_ZMBV_DECODER
   BUF_VIDEO_ZMBV,
-  #endif
-  #ifdef CONFIG_SMACKVIDEO_DECODER
   BUF_VIDEO_SMACKER,
-  #endif
-  #ifdef CONFIG_NUV_DECODER
   BUF_VIDEO_NUV,
-  #endif
-  #ifdef CONFIG_KMVC_DECODER
   BUF_VIDEO_KMVC,
-  #endif
-  #ifdef CONFIG_FLASHSV_DECODER
   BUF_VIDEO_FLASHSV,
-  #endif
-  #ifdef CONFIG_CAVS_DECODER
   BUF_VIDEO_CAVS,
-  #endif
-  #ifdef CONFIG_VMNC_DECODER
   BUF_VIDEO_VMNC,
-  #endif
-  #ifdef CONFIG_SNOW_DECODER
   BUF_VIDEO_SNOW,
-  #endif
   BUF_VIDEO_THEORA_RAW,
   0 
 };
 
-static uint32_t wmv8_video_types[] = { 
+static const uint32_t wmv8_video_types[] = { 
   BUF_VIDEO_WMV8,
   0 
 };
 
-static uint32_t wmv9_video_types[] = { 
+static const uint32_t wmv9_video_types[] = { 
   BUF_VIDEO_WMV9,
   0 
 };
