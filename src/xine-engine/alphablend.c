@@ -36,9 +36,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "xine_internal.h"
-#include "video_out.h"
-#include "alphablend.h"
+#include <xine/xine_internal.h>
+#include <xine/video_out.h>
+#include <xine/alphablend.h>
 #include "bswap.h"
 
 
@@ -1108,7 +1108,7 @@ static void blend_yuv_exact(uint8_t *dst_cr, uint8_t *dst_cb, int src_width,
 
 static uint8_t *(*blend_yuv_grow_extra_data(alphablend_t *extra_data, int osd_width))[ 3 ][ 2 ]
 {
-  struct __attribute__((packed)) header_s {
+  struct XINE_PACKED header_s {
     int id;
     int max_width;
     uint8_t *data[ 3 ][ 2 ];
@@ -1550,7 +1550,7 @@ static void blend_yuy2_exact(uint8_t *dst_cr, uint8_t *dst_cb, int src_width,
 
 static uint8_t *(*blend_yuy2_grow_extra_data(alphablend_t *extra_data, int osd_width))[ 3 ]
 {
-  struct __attribute__((packed)) header_s {
+  struct XINE_PACKED header_s {
     int id;
     int max_width;
     uint8_t *data[ 3 ];
