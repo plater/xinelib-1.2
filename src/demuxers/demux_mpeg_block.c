@@ -31,15 +31,21 @@
 #include <unistd.h>
 #include <string.h>
 
+#ifdef HAVE_FFMPEG_AVUTIL_H
+#  include <mem.h>
+#else
+#  include <libavutil/mem.h>
+#endif
+
 #define LOG_MODULE "demux_mpeg_block"
 #define LOG_VERBOSE
 /*
 #define LOG
 */
 
-#include "xine_internal.h"
-#include "xineutils.h"
-#include "demux.h"
+#include <xine/xine_internal.h>
+#include <xine/xineutils.h>
+#include <xine/demux.h>
 
 #define NUM_PREVIEW_BUFFERS   250
 #define DISC_TRESHOLD       90000
@@ -70,7 +76,6 @@ typedef struct demux_mpeg_block_s {
   char                  cur_mrl[256];
 
   uint8_t              *scratch;
-  void                 *scratch_base;
 
   int64_t               nav_last_end_pts;
   int64_t               nav_last_start_pts;
@@ -1176,7 +1181,7 @@ static void demux_mpeg_block_dispose (demux_plugin_t *this_gen) {
 
   demux_mpeg_block_t *this = (demux_mpeg_block_t *) this_gen;
   
-  free (this->scratch_base);
+  av_free (this->scratch);
   free (this);
 }
 
@@ -1385,7 +1390,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
   this->demux_plugin.get_optional_data = demux_mpeg_block_get_optional_data;
   this->demux_plugin.demux_class       = class_gen;
 
-  this->scratch    = xine_xmalloc_aligned (512, 4096, &this->scratch_base);
+  this->scratch    = av_mallocz(4096);
   this->status     = DEMUX_FINISHED;
 
   lprintf ("open_plugin:detection_method=%d\n",
@@ -1397,7 +1402,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
 
     /* use demux_mpeg for non-block devices */
     if (!(input->get_capabilities(input) & INPUT_CAP_BLOCK)) {
-      free (this->scratch_base);
+      av_free (this->scratch);
       free (this);
       return NULL;
     }
@@ -1411,7 +1416,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
         this->blocksize = demux_mpeg_detect_blocksize( this, input );
 
       if (!this->blocksize) {
-        free (this->scratch_base);
+        av_free (this->scratch);
         free (this);
         return NULL;
       }
@@ -1425,7 +1430,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
             || (this->scratch[2] != 0x01) || (this->scratch[3] != 0xba)) {
 	  lprintf("open_plugin:scratch failed\n");
 
-          free (this->scratch_base);
+          av_free (this->scratch);
           free (this);
           return NULL;
         }
@@ -1433,7 +1438,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
         /* if it's a file then make sure it's mpeg-2 */
         if ( !input->get_blocksize(input)
              && ((this->scratch[4]>>4) != 4) ) {
-          free (this->scratch_base);
+          av_free (this->scratch);
           free (this);
           return NULL;
         }
@@ -1447,45 +1452,13 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
         break;
       }
     }
-    free (this->scratch_base);
+    av_free (this->scratch);
     free (this);
     return NULL;
   }
   break;
 
-  case METHOD_BY_EXTENSION: {
-    char *ending;
-
-    const char *const mrl = input->get_mrl (input);
-
-    if(!strncmp(mrl, "vcd:", 4)) {
-      this->blocksize = 2324;
-      demux_mpeg_block_accept_input (this, input);
-    } else if(!strncmp(mrl, "dvd:", 4) || !strncmp(mrl, "pvr:", 4)) {
-      this->blocksize = 2048;
-      demux_mpeg_block_accept_input (this, input);
-    } else {
-      ending = strrchr(mrl, '.');
-
-      if (!ending) {
-        free (this->scratch_base);
-        free (this);
-        return NULL;
-      }
-      if ( (!strncasecmp (ending, ".vob", 4)) ||
-	   (!strncmp((ending + 3), "mpeg2", 5)) ||
-	   (!strncmp((ending + 3), "mpeg1", 5)) ) {
-        this->blocksize = 2048;
-        demux_mpeg_block_accept_input(this, input);
-      } else {
-        free (this->scratch_base);
-        free (this);
-        return NULL;
-      }
-    }
-  }
-  break;
-
+  case METHOD_BY_MRL:
   case METHOD_EXPLICIT: {
 
     this->blocksize = input->get_blocksize(input);
@@ -1496,7 +1469,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
       this->blocksize = demux_mpeg_detect_blocksize( this, input );
 
     if (!this->blocksize) {
-      free (this->scratch_base);
+      av_free (this->scratch);
       free (this);
       return NULL;
     }
@@ -1506,36 +1479,13 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen, xine_stream_t *str
   break;
 
   default:
-    free (this->scratch_base);
+    av_free (this->scratch);
     free (this);
     return NULL;
   }
 
   return &this->demux_plugin;
 }
-
-static const char *get_description (demux_class_t *this_gen) {
-  return "DVD/VOB demux plugin";
-}
-
-static const char *get_identifier (demux_class_t *this_gen) {
-  return "MPEG_BLOCK";
-}
-
-static const char *get_extensions (demux_class_t *this_gen) {
-  return "vob";
-}
-
-static const char *get_mimetypes (demux_class_t *this_gen) {
-  return NULL;
-}
-
-static void class_dispose (demux_class_t *this_gen) {
-
-  demux_mpeg_block_class_t *this = (demux_mpeg_block_class_t *) this_gen;
-
-  free (this);
- }
 
 static void *init_plugin (xine_t *xine, void *data) {
 
@@ -1546,11 +1496,11 @@ static void *init_plugin (xine_t *xine, void *data) {
   this->xine   = xine;
 
   this->demux_class.open_plugin     = open_plugin;
-  this->demux_class.get_description = get_description;
-  this->demux_class.get_identifier  = get_identifier;
-  this->demux_class.get_mimetypes   = get_mimetypes;
-  this->demux_class.get_extensions  = get_extensions;
-  this->demux_class.dispose         = class_dispose;
+  this->demux_class.description     = N_("DVD/VOB demux plugin");
+  this->demux_class.identifier      = "MPEG_BLOCK";
+  this->demux_class.mimetypes       = NULL;
+  this->demux_class.extensions      = "vob vcd:/ dvd:/ pvr:/";
+  this->demux_class.dispose         = default_demux_class_dispose;
 
   return this;
 }
@@ -1564,6 +1514,6 @@ static const demuxer_info_t demux_info_mpeg_block = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */  
-  { PLUGIN_DEMUX, 26, "mpeg_block", XINE_VERSION_CODE, &demux_info_mpeg_block, init_plugin },
+  { PLUGIN_DEMUX, 27, "mpeg_block", XINE_VERSION_CODE, &demux_info_mpeg_block, init_plugin },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };
