@@ -45,10 +45,10 @@
 #define LOG
 */
 
-#include "xine_internal.h"
-#include "video_out.h"
-#include "metronom.h"
-#include "xineutils.h"
+#include <xine/xine_internal.h>
+#include <xine/video_out.h>
+#include <xine/metronom.h>
+#include <xine/xineutils.h>
 
 #define NUM_FRAME_BUFFERS          15
 #define MAX_USEC_TO_SLEEP       20000
@@ -133,6 +133,9 @@ typedef struct {
   int                       frame_drop_cpt;
   int                       frame_drop_suggested;
   int                       crop_left, crop_right, crop_top, crop_bottom;
+  pthread_mutex_t           trigger_drawing_mutex;
+  pthread_cond_t            trigger_drawing_cond;
+  int                       trigger_drawing;
 } vos_t;
 
 
@@ -931,8 +934,8 @@ static vo_frame_t *get_next_frame (vos_t *this, int64_t cur_vpts,
         img->vpts = cur_vpts;
         /* extra info of the backup is thrown away, because it is not up to date */
         _x_extra_info_reset(img->extra_info);
+        img->future_frame = NULL;
       }
-
       return img;
 
     } else {
@@ -991,6 +994,13 @@ static vo_frame_t *get_next_frame (vos_t *this, int64_t cur_vpts,
      * remove frame from display queue and show it
      */
 
+    if ( img ) {
+      if ( img->next )
+        img->future_frame = img->next;
+      else
+        img->future_frame = NULL;
+    }
+    
     img = vo_remove_from_img_buf_queue_int (this->display_img_buf_queue, 1, 0, 0, 0, 0, 0);
     pthread_mutex_unlock(&this->display_img_buf_queue->mutex);
 
@@ -1069,6 +1079,32 @@ static void check_redraw_needed (vos_t *this, int64_t vpts) {
     this->redraw_needed = 1;
 }
 
+static int interruptable_sleep(vos_t *this, int usec_to_sleep)
+{
+  int timedout = 0;
+
+  struct timeval now;
+  gettimeofday(&now, 0);
+
+  pthread_mutex_lock (&this->trigger_drawing_mutex);
+  if (!this->trigger_drawing) {
+    struct timespec abstime;
+    abstime.tv_sec  = now.tv_sec + usec_to_sleep / 1000000;
+    abstime.tv_nsec = now.tv_usec * 1000 + (usec_to_sleep % 1000000) * 1000;
+
+    if (abstime.tv_nsec > 1000000000) {
+      abstime.tv_nsec -= 1000000000;
+      abstime.tv_sec++;
+    }
+
+    timedout = pthread_cond_timedwait(&this->trigger_drawing_cond, &this->trigger_drawing_mutex, &abstime);
+  }
+  this->trigger_drawing = 0;
+  pthread_mutex_unlock (&this->trigger_drawing_mutex);
+
+  return timedout;
+}
+
 /* special loop for paused mode
  * needed to update screen due overlay changes, resize, window
  * movement, brightness adjusting etc.
@@ -1114,7 +1150,7 @@ static void paused_loop( vos_t *this, int64_t vpts )
     }
 
     pthread_mutex_unlock( &this->free_img_buf_queue->mutex );
-    xine_usec_sleep (20000);
+    interruptable_sleep(this, 20000);
     pthread_mutex_lock( &this->free_img_buf_queue->mutex );
   }
 
@@ -1257,7 +1293,11 @@ static void *video_out_loop (void *this_gen) {
 		"video_out: vpts/clock error, next_vpts=%" PRId64 " cur_vpts=%" PRId64 "\n", next_frame_vpts,vpts);
 
       if (usec_to_sleep > 0)
-        xine_usec_sleep (usec_to_sleep);
+      {
+        /* honor trigger update only when a backup img is available */
+        if (0 == interruptable_sleep(this, usec_to_sleep) && this->img_backup)
+          break;
+      }
 
       if (this->discard_frames)
         break;
@@ -1419,6 +1459,14 @@ static int vo_get_property (xine_video_port_t *this_gen, int property) {
     ret = this->video_loop_running ? this->display_img_buf_queue->num_buffers : -1;
     break;
 
+  case VO_PROP_BUFS_FREE:
+    ret = this->video_loop_running ? this->free_img_buf_queue->num_buffers : -1;
+    break;
+
+  case VO_PROP_BUFS_TOTAL:
+    ret = this->video_loop_running ? this->free_img_buf_queue->num_buffers_max : -1;
+    break;
+
   case VO_PROP_NUM_STREAMS:
     pthread_mutex_lock(&this->streams_lock);
     ret = xine_list_size(this->streams);
@@ -1441,6 +1489,8 @@ static int vo_get_property (xine_video_port_t *this_gen, int property) {
     ret = this->crop_bottom;
     break;
 
+  case XINE_PARAM_VO_SHARPNESS:
+  case XINE_PARAM_VO_NOISE_REDUCTION:
   case XINE_PARAM_VO_HUE:
   case XINE_PARAM_VO_SATURATION:
   case XINE_PARAM_VO_CONTRAST:
@@ -1535,6 +1585,8 @@ static int vo_set_property (xine_video_port_t *this_gen, int property, int value
     ret = this->crop_bottom = value;
     break;
 
+  case XINE_PARAM_VO_SHARPNESS:
+  case XINE_PARAM_VO_NOISE_REDUCTION:
   case XINE_PARAM_VO_HUE:
   case XINE_PARAM_VO_SATURATION:
   case XINE_PARAM_VO_CONTRAST:
@@ -1646,6 +1698,9 @@ static void vo_exit (xine_video_port_t *this_gen) {
   free (this->free_img_buf_queue);
   free (this->display_img_buf_queue);
 
+  pthread_cond_destroy(&this->trigger_drawing_cond);
+  pthread_mutex_destroy(&this->trigger_drawing_mutex);
+
   free (this);
 }
 
@@ -1713,6 +1768,15 @@ static void vo_flush (xine_video_port_t *this_gen) {
     this->discard_frames--;
     pthread_mutex_unlock(&this->display_img_buf_queue->mutex);
   }
+}
+
+static void vo_trigger_drawing (xine_video_port_t *this_gen) {
+  vos_t      *this = (vos_t *) this_gen;
+
+  pthread_mutex_lock (&this->trigger_drawing_mutex);
+  this->trigger_drawing = 1;
+  pthread_cond_signal (&this->trigger_drawing_cond);
+  pthread_mutex_unlock (&this->trigger_drawing_mutex);
 }
 
 /* crop_frame() will allocate a new frame to copy in the given image
@@ -1810,6 +1874,7 @@ xine_video_port_t *_x_vo_new_port (xine_t *xine, vo_driver_t *driver, int grabon
   this->vo.enable_ovl            = vo_enable_overlay;
   this->vo.get_overlay_manager   = vo_get_overlay_manager;
   this->vo.flush                 = vo_flush;
+  this->vo.trigger_drawing       = vo_trigger_drawing;
   this->vo.get_property          = vo_get_property;
   this->vo.set_property          = vo_set_property;
   this->vo.status                = vo_status;
@@ -1903,6 +1968,9 @@ xine_video_port_t *_x_vo_new_port (xine_t *xine, vo_driver_t *driver, int grabon
       "were not scheduled for display in time, xine sends a notification."),
     20, NULL, NULL);
 
+  pthread_mutex_init(&this->trigger_drawing_mutex, NULL);
+  pthread_cond_init(&this->trigger_drawing_cond, NULL);
+  this->trigger_drawing = 0;
 
   if (grabonly) {
 
