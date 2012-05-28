@@ -36,15 +36,24 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "xine_internal.h"
-#include "video_out.h"
-#include "alphablend.h"
+#include <xine/xine_internal.h>
+#include <xine/video_out.h>
+#include <xine/alphablend.h>
 #include "bswap.h"
 
 
 #define BLEND_COLOR(dst, src, mask, o) ((((((src&mask)-(dst&mask))*(o*0x111+1))>>12)+(dst&mask))&mask)
 
 #define BLEND_BYTE(dst, src, o) (((((src)-(dst))*(o*0x1111+1))>>16)+(dst))
+
+static void mem_blend8(uint8_t *mem, uint8_t val, uint8_t o, size_t sz)
+{
+  uint8_t *limit = mem + sz;
+  while (mem < limit) {
+    *mem = BLEND_BYTE(*mem, val, o);
+    mem++;
+  }
+}
 
 static void mem_blend16(uint16_t *mem, uint16_t clr, uint8_t o, int len) {
   uint16_t *limit = mem + len;
@@ -1047,15 +1056,6 @@ void _x_blend_rgb32 (uint8_t * img, vo_overlay_t * img_overl,
   }
 }
 
-static void mem_blend8(uint8_t *mem, uint8_t val, uint8_t o, size_t sz)
-{
-  uint8_t *limit = mem + sz;
-  while (mem < limit) {
-    *mem = BLEND_BYTE(*mem, val, o);
-    mem++;
-  }
-}
-
 static void blend_yuv_exact(uint8_t *dst_cr, uint8_t *dst_cb, int src_width,
                             uint8_t *(*blend_yuv_data)[ 3 ][ 2 ])
 {
@@ -1114,7 +1114,10 @@ static uint8_t *(*blend_yuv_grow_extra_data(alphablend_t *extra_data, int osd_wi
     uint8_t *data[ 3 ][ 2 ];
   } *header = (struct header_s *)extra_data->buffer;
 
-  size_t needed_buffer_size = sizeof (*header) + osd_width * sizeof (uint8_t[ 3 ][ 2 ]);
+  /* align buffers to 16 bytes */
+  size_t header_size = (sizeof(*header) + 15) & (~15);
+  size_t alloc_width = (osd_width + 15) & (~15);
+  size_t needed_buffer_size = 16 + header_size + alloc_width * sizeof (uint8_t[ 3 ][ 2 ]);
 
   if (extra_data->buffer_size < needed_buffer_size) {
 
@@ -1133,12 +1136,12 @@ static uint8_t *(*blend_yuv_grow_extra_data(alphablend_t *extra_data, int osd_wi
     header->id = ME_FOURCC('y', 'u', 'v', 0);
     header->max_width = osd_width;
 
-    header->data[ 0 ][ 0 ] = ((uint8_t *)extra_data->buffer) + sizeof (*header);
-    header->data[ 0 ][ 1 ] = header->data[ 0 ][ 0 ] + osd_width;
-    header->data[ 1 ][ 0 ] = header->data[ 0 ][ 1 ] + osd_width;
-    header->data[ 1 ][ 1 ] = header->data[ 1 ][ 0 ] + osd_width;
-    header->data[ 2 ][ 0 ] = header->data[ 1 ][ 1 ] + osd_width;
-    header->data[ 2 ][ 1 ] = header->data[ 2 ][ 0 ] + osd_width;
+    header->data[ 0 ][ 0 ] = ((uint8_t *)extra_data->buffer) + header_size;
+    header->data[ 0 ][ 1 ] = header->data[ 0 ][ 0 ] + alloc_width;
+    header->data[ 1 ][ 0 ] = header->data[ 0 ][ 1 ] + alloc_width;
+    header->data[ 1 ][ 1 ] = header->data[ 1 ][ 0 ] + alloc_width;
+    header->data[ 2 ][ 0 ] = header->data[ 1 ][ 1 ] + alloc_width;
+    header->data[ 2 ][ 1 ] = header->data[ 2 ][ 0 ] + alloc_width;
   }
 
   return &(header->data);
@@ -1556,7 +1559,10 @@ static uint8_t *(*blend_yuy2_grow_extra_data(alphablend_t *extra_data, int osd_w
     uint8_t *data[ 3 ];
   } *header = (struct header_s *)extra_data->buffer;
 
-  size_t needed_buffer_size = sizeof (*header) + osd_width * sizeof (uint8_t[ 3 ]);
+  /* align buffers to 16 bytes */
+  size_t header_size = (sizeof(*header) + 15) & (~15);
+  size_t alloc_width = (osd_width + 15) & (~15);
+  size_t needed_buffer_size = 16 + header_size + alloc_width * sizeof (uint8_t[ 3 ]);
 
   if (extra_data->buffer_size < needed_buffer_size) {
 
@@ -1575,9 +1581,9 @@ static uint8_t *(*blend_yuy2_grow_extra_data(alphablend_t *extra_data, int osd_w
     header->id = ME_FOURCC('y', 'u', 'y', '2');
     header->max_width = osd_width;
 
-    header->data[ 0 ] = ((uint8_t *)extra_data->buffer) + sizeof (*header);
-    header->data[ 1 ] = header->data[ 0 ] + osd_width;
-    header->data[ 2 ] = header->data[ 1 ] + osd_width;
+    header->data[ 0 ] = ((uint8_t *)extra_data->buffer) + header_size;
+    header->data[ 1 ] = header->data[ 0 ] + alloc_width;
+    header->data[ 2 ] = header->data[ 1 ] + alloc_width;
   }
 
   return &(header->data);
