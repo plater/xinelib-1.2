@@ -64,10 +64,10 @@
 #define LOG
 */
 
-#include "xine_internal.h"
-#include "xineutils.h"
-#include "compat.h"
-#include "audio_out.h"
+#include <xine/xine_internal.h>
+#include <xine/xineutils.h>
+#include <xine/compat.h>
+#include <xine/audio_out.h>
 
 #include <sys/time.h>
 
@@ -93,7 +93,7 @@
 #       define AFMT_AC3         0x00000400
 #endif
 
-#define AO_OUT_OSS_IFACE_VERSION 8
+#define AO_OUT_OSS_IFACE_VERSION 9
 
 #define AUDIO_NUM_FRAGMENTS     15
 #define AUDIO_FRAGMENT_SIZE   8192
@@ -660,7 +660,7 @@ static int ao_oss_ctrl(ao_driver_t *this_gen, int cmd, ...) {
  * If not, the function returns 0.
  */
 static int probe_audio_devices(oss_driver_t *this) {
-  const char *base_names[2] = {"/dev/dsp", "/dev/sound/dsp"};
+  static const char *const base_names[2] = {"/dev/dsp", "/dev/sound/dsp"};
   int base_num, i;
   int audio_fd, rate;
   int best_rate;
@@ -704,11 +704,11 @@ static ao_driver_t *open_plugin (audio_driver_class_t *class_gen, const void *da
   int              caps;
   int              audio_fd;
   int              num_channels, status, arg;
-  static char     *sync_methods[] = {"auto", "getodelay", "getoptr", "softsync", "probebuffer", NULL};
-  static char     *devname_opts[] = {"auto", "/dev/dsp", "/dev/sound/dsp", NULL};
+  static const char * const sync_methods[] = {"auto", "getodelay", "getoptr", "softsync", "probebuffer", NULL};
+  static const char * const devname_opts[] = {"auto", "/dev/dsp", "/dev/sound/dsp", NULL};
   int devname_val, devname_num;
   /* for usability reasons, keep this in sync with audio_alsa_out.c */
-  static char     *speaker_arrangement[] = {"Mono 1.0", "Stereo 2.0", "Headphones 2.0", "Stereo 2.1",
+  static const char * const speaker_arrangement[] = {"Mono 1.0", "Stereo 2.0", "Headphones 2.0", "Stereo 2.1",
     "Surround 3.0", "Surround 4.0", "Surround 4.1", "Surround 5.0", "Surround 5.1", "Surround 6.0",
     "Surround 6.1", "Surround 7.1", "Pass Through", NULL};
   #define MONO		0
@@ -1040,14 +1040,10 @@ static ao_driver_t *open_plugin (audio_driver_class_t *class_gen, const void *da
       parse += 3;
       if (devname_val == 0)
 	snprintf(mixer_dev, sizeof(mixer_dev), "%smixer%s", mixer_name, parse);
-      else {
-	if (mixer_num == -1)
-	  snprintf(mixer_dev, sizeof(mixer_dev), "%smixer", mixer_name);
-	else
-	  snprintf(mixer_dev, sizeof(mixer_dev), "%smixer%d", mixer_name, mixer_num);
-      }
-    } else {
-      _x_abort();
+      else if (mixer_num == -1)
+	snprintf(mixer_dev, sizeof(mixer_dev), "%smixer", mixer_name);
+      else
+	snprintf(mixer_dev, sizeof(mixer_dev), "%smixer%d", mixer_name, mixer_num);
     }
 
     this->mixer.fd = xine_open_cloexec(mixer_dev, O_RDONLY);
@@ -1145,22 +1141,6 @@ static void oss_speaker_arrangement_cb (void *user_data,
 /*
  * class functions
  */
-
-static char* get_identifier (audio_driver_class_t *this_gen) {
-  return "oss";
-}
-
-static char* get_description (audio_driver_class_t *this_gen) {
-  return _("xine audio output plugin using oss-compliant audio devices/drivers");
-}
-
-static void dispose_class (audio_driver_class_t *this_gen) {
-
-  oss_class_t *this = (oss_class_t *) this_gen;
-
-  free (this);
-}
-
 static void *init_class (xine_t *xine, void *data) {
 
   oss_class_t        *this;
@@ -1170,9 +1150,9 @@ static void *init_class (xine_t *xine, void *data) {
     return NULL;
 
   this->driver_class.open_plugin     = open_plugin;
-  this->driver_class.get_identifier  = get_identifier;
-  this->driver_class.get_description = get_description;
-  this->driver_class.dispose         = dispose_class;
+  this->driver_class.identifier      = "oss";
+  this->driver_class.description     = N_("xine audio output plugin using oss-compliant audio devices/drivers");
+  this->driver_class.dispose         = default_audio_driver_class_dispose;
 
   this->config = xine->config;
   this->xine   = xine;
