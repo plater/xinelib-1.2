@@ -41,9 +41,9 @@
 
 #include <pulse/pulseaudio.h>
 
-#include "xine_internal.h"
-#include "xineutils.h"
-#include "audio_out.h"
+#include <xine/xine_internal.h>
+#include <xine/xineutils.h>
+#include <xine/audio_out.h>
 #include "bswap.h"
 
 #define GAP_TOLERANCE        AO_MAX_GAP
@@ -298,7 +298,8 @@ static int connect_context(pulse_driver_t *this) {
   }
 
   if (!this->context) {
-    char fn[XINE_PATH_MAX], *p;
+    char fn[XINE_PATH_MAX];
+    const char *p;
 
     if (pa_get_binary_name(fn, sizeof(fn)))
       p = pa_path_get_filename(fn);
@@ -954,14 +955,6 @@ static ao_driver_t *open_plugin (audio_driver_class_t *class_gen, const void *da
  * class functions
  */
 
-static char* get_identifier (audio_driver_class_t *this_gen) {
-  return "pulseaudio";
-}
-
-static char* get_description (audio_driver_class_t *this_gen) {
-  return _("xine audio output plugin using pulseaudio sound server");
-}
-
 static void dispose_class (audio_driver_class_t *this_gen) {
 
   pulse_class_t *this = (pulse_class_t *) this_gen;
@@ -981,9 +974,9 @@ static void *init_class (xine_t *xine, void *data) {
 
   this->xine = xine;
   this->driver_class.open_plugin     = open_plugin;
-  this->driver_class.get_identifier  = get_identifier;
-  this->driver_class.get_description = get_description;
   this->driver_class.dispose         = dispose_class;
+  this->driver_class.identifier	     = "pulseaudio";
+  this->driver_class.description     = N_("xine audio output plugin using pulseaudio sound server");
 
   return this;
 }
@@ -998,6 +991,6 @@ static const ao_info_t ao_info_pulse = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */
-  { PLUGIN_AUDIO_OUT, 8, "pulseaudio", XINE_VERSION_CODE, &ao_info_pulse, init_class },
+  { PLUGIN_AUDIO_OUT, 9, "pulseaudio", XINE_VERSION_CODE, &ao_info_pulse, init_class },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };
