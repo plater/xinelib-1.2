@@ -24,9 +24,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
-#include <signal.h>
-#include <setjmp.h>
+
+#if defined(HAVE_MLIB) && defined(MLIB_LAZYLOAD)
 #include <dlfcn.h>
+#endif
 
 #if defined (__SVR4) && defined (__sun)
 #include <sys/systeminfo.h>
@@ -38,38 +39,55 @@
 #define LOG
 */
 
-#include "xineutils.h"
+#include <xine/xineutils.h>
 
 #if defined(PIC) && ! defined(__PIC__)
 #define __PIC__
 #endif
 
-#if defined(ARCH_X86) || defined(ARCH_X86_64)
+#if defined(__i386__) || defined(__x86_64__)
 
-#ifndef __x86_64__
+#include <signal.h>
+#include <setjmp.h>
+
 static jmp_buf sigill_return;
 
 static void sigill_handler (int n) {
   longjmp(sigill_return, 1);
 }
-#endif
 
 static uint32_t arch_accel (void)
 {
-  uint32_t caps;
+  uint32_t caps = 0;
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || \
+  ( defined(__SSE__) && defined(__SSE2__) && defined(__MMX__) )
   /* No need to test for this on AMD64, we know what the
      platform has.  */
-  caps = MM_ACCEL_X86_MMX | MM_ACCEL_X86_SSE | MM_ACCEL_X86_MMXEXT | MM_ACCEL_X86_SSE2;
-#else
+  caps = MM_ACCEL_X86_MMX | MM_ACCEL_X86_SSE | MM_ACCEL_X86_MMXEXT | MM_ACCEL_X86_SSE2
+#  if defined(__3dNOW__)
+    | MM_ACCEL_X86_3DNOW
+#  endif
+    ;
+#endif
 
 #ifndef _MSC_VER
+  void (*old_sigill_handler)(int);
   uint32_t eax, ebx, ecx, edx;
-  int AMD;
 
-  caps = 0;
-#ifndef __PIC__
+#if defined(__x86_64__)
+#define cpuid(op,eax,ebx,ecx,edx)       \
+    __asm__ ("push %%rbx\n\t"           \
+         "cpuid\n\t"                    \
+         "movl %%ebx,%1\n\t"            \
+         "pop %%rbx"                    \
+         : "=a" (eax),                  \
+           "=r" (ebx),                  \
+           "=c" (ecx),                  \
+           "=d" (edx)                   \
+         : "a" (op)                     \
+         : "cc")
+#elif !defined(__PIC__)
 #define cpuid(op,eax,ebx,ecx,edx)       \
     __asm__ ("cpuid"                    \
          : "=a" (eax),                  \
@@ -92,6 +110,7 @@ static uint32_t arch_accel (void)
          : "cc")
 #endif
 
+#ifndef __x86_64__
   __asm__ ("pushfl\n\t"
        "pushfl\n\t"
        "popl %0\n\t"
@@ -118,9 +137,13 @@ static uint32_t arch_accel (void)
     return 0;
   }
 
-  AMD = (ebx == 0x68747541) && (ecx == 0x444d4163) && (edx == 0x69746e65);
+  int AMD = (ebx == 0x68747541) && (ecx == 0x444d4163) && (edx == 0x69746e65);
+
+#endif /* __x86_64__ */
 
   cpuid (0x00000001, eax, ebx, ecx, edx);
+
+#ifndef __x86_64__
   if (edx & 0x00800000) {
     /* MMX */
     caps |= MM_ACCEL_X86_MMX;
@@ -135,7 +158,42 @@ static uint32_t arch_accel (void)
     /* SSE2 */
     caps |= MM_ACCEL_X86_SSE2;
   }
+#endif /* __x86_64__ */
 
+  if (ecx & 0x00000001) {
+    caps |= MM_ACCEL_X86_SSE3;
+  }
+  if (ecx & 0x00000200) {
+    caps |= MM_ACCEL_X86_SSSE3;
+  }
+  if (ecx & 0x00080000) {
+    caps |= MM_ACCEL_X86_SSE4;
+  }
+  if (ecx & 0x00100000) {
+    caps |= MM_ACCEL_X86_SSE42;
+  }
+
+  /* Check OXSAVE and AVX bits */
+  if ((ecx & 0x18000000) == 0x18000000) {
+    /* test OS support for AVX */
+
+    old_sigill_handler = signal (SIGILL, sigill_handler);
+
+    if (setjmp(sigill_return)) {
+      lprintf("OS doesn't support AVX instructions.\n");
+    } else {
+      /* Get value of extended control register 0 */
+      __asm__ (".byte 0x0f, 0x01, 0xd0" : "=a"(eax), "=d"(edx) : "c" (0));
+      if ((eax & 0x6) == 0x6) {
+	caps |= MM_ACCEL_X86_AVX;
+      }
+
+    }
+
+    signal(SIGILL, old_sigill_handler);
+  }
+
+#ifndef __x86_64__
   cpuid (0x80000000, eax, ebx, ecx, edx);
   if (eax >= 0x80000001) {
     cpuid (0x80000001, eax, ebx, ecx, edx);
@@ -150,19 +208,19 @@ static uint32_t arch_accel (void)
       caps |= MM_ACCEL_X86_MMXEXT;
     }
   }
-#else
-  caps = 0;
+#endif /* __x86_64__ */
 #endif /* _MSC_VER */
 
+#ifndef __x86_64__
   /* test OS support for SSE */
   if (caps & MM_ACCEL_X86_SSE) {
-    void (*old_sigill_handler)(int);
-
     old_sigill_handler = signal (SIGILL, sigill_handler);
 
     if (setjmp(sigill_return)) {
       lprintf("OS doesn't support SSE instructions.\n");
-      caps &= ~(MM_ACCEL_X86_SSE|MM_ACCEL_X86_SSE2);
+      caps &= ~(MM_ACCEL_X86_SSE|MM_ACCEL_X86_SSE2|
+		MM_ACCEL_X86_SSE3|MM_ACCEL_X86_SSSE3|
+		MM_ACCEL_X86_SSE4|MM_ACCEL_X86_SSE42);
     } else {
       __asm__ volatile ("xorps %xmm0, %xmm0");
     }
@@ -175,9 +233,12 @@ static uint32_t arch_accel (void)
   return caps;
 }
 
-#endif /* ARCH_X86 */
+#endif /* i386 or x86_64 */
 
 #if defined(ARCH_PPC) && defined(ENABLE_ALTIVEC)
+#include <signal.h>
+#include <setjmp.h>
+
 static sigjmp_buf jmpbuf;
 static volatile sig_atomic_t canjump = 0;
 
@@ -262,6 +323,9 @@ static uint32_t arch_accel (void)
   return flags;
 }
 #else
+#include <signal.h>
+#include <setjmp.h>
+
 static sigjmp_buf jmpbuf;
 static volatile sig_atomic_t canjump = 0;
 
@@ -332,7 +396,7 @@ uint32_t xine_mm_accel (void)
 #endif
 #endif
 
-#if defined(ARCH_X86) || defined(ARCH_X86_64) || (defined(ARCH_PPC) && defined(ENABLE_ALTIVEC)) || (defined(ARCH_SPARC) && defined(ENABLE_VIS))
+#if defined(__i386__) || defined(__x86_64__) || (defined(ARCH_PPC) && defined(ENABLE_ALTIVEC)) || (defined(ARCH_SPARC) && defined(ENABLE_VIS))
     accel |= arch_accel();
 #endif
 
