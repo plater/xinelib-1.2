@@ -38,10 +38,10 @@
 #define LOG
 */
 
-#include "xine_internal.h"
-#include "xineutils.h"
+#include <xine/xine_internal.h>
+#include <xine/xineutils.h>
 #include "bswap.h"
-#include "demux.h"
+#include <xine/demux.h>
 
 #define IMAGE_HEADER_LEN 4
 
@@ -66,12 +66,11 @@ static int demux_image_get_status (demux_plugin_t *this_gen) {
   return this->status;
 }
 
-static int demux_image_next (demux_plugin_t *this_gen, int preview) {
+static int demux_image_next (demux_plugin_t *this_gen, int preview, int first_fragment) {
   demux_image_t *this = (demux_image_t *) this_gen;
   buf_element_t *buf = this->video_fifo->buffer_pool_alloc (this->video_fifo);
 
   buf->content = buf->mem;
-  buf->type = this->buf_type;
 
   buf->size = this->input->read (this->input, (char *)buf->mem, buf->max_size-1);
 
@@ -80,9 +79,17 @@ static int demux_image_next (demux_plugin_t *this_gen, int preview) {
     buf->decoder_flags |= BUF_FLAG_FRAME_END;
     this->status = DEMUX_FINISHED;
   } else {
+    if (first_fragment &&
+        ( memcmp (buf->content, "\377\330\377", 3) == 0 || /* JPEG */
+          (_X_BE_16(&buf->content[0]) == 0xffd8))) {        /* another JPEG */
+          fprintf(stderr, "JPEG\n");
+          this->buf_type = BUF_VIDEO_JPEG;
+        }
+
     this->status = DEMUX_OK;
   }
 
+  buf->type = this->buf_type;
   if (preview)
     buf->decoder_flags = BUF_FLAG_PREVIEW;
 
@@ -92,7 +99,7 @@ static int demux_image_next (demux_plugin_t *this_gen, int preview) {
 }
 
 static int demux_image_send_chunk (demux_plugin_t *this_gen) {
-  return demux_image_next(this_gen, 0);
+  return demux_image_next(this_gen, 0, 0);
 }
 
 static void demux_image_send_headers (demux_plugin_t *this_gen) {
@@ -105,7 +112,8 @@ static void demux_image_send_headers (demux_plugin_t *this_gen) {
   this->input->seek (this->input, 0, SEEK_SET);
 
   /* we can send everything here. this makes image decoder a lot easier */
-  while (demux_image_next(this_gen,1) == DEMUX_OK);
+  demux_image_next(this_gen, 1, 1);
+  while (demux_image_next(this_gen, 1, 0) == DEMUX_OK);
 
   this->status = DEMUX_OK;
 
@@ -143,13 +151,6 @@ static int demux_image_get_optional_data(demux_plugin_t *this_gen,
   return DEMUX_OPTIONAL_UNSUPPORTED;
 }
 
-static void demux_image_dispose (demux_plugin_t *this_gen) {
-  demux_image_t *this = (demux_image_t *) this_gen;
-
-  lprintf("closed\n");
-  free (this);
-}
-
 static demux_plugin_t *open_plugin (demux_class_t *class_gen,
 				    xine_stream_t *stream,
 				    input_plugin_t *input) {
@@ -165,6 +166,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen,
       return NULL;
     }
     if (memcmp (header, "GIF", 3) == 0 /* GIF */
+        || memcmp (header, "BM", 2) == 0 /* BMP */
         || memcmp (header, "\377\330\377", 3) == 0 /* JPEG */
 	|| (_X_BE_16(&header[0]) == 0xffd8) /* another JPEG */
 	|| memcmp (header, "\x89PNG", 4) == 0) { /* PNG */
@@ -174,18 +176,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen,
   }
   break;
 
-  case METHOD_BY_EXTENSION: {
-    const char *extensions, *mrl;
-
-    mrl = input->get_mrl (input);
-    extensions = class_gen->get_extensions (class_gen);
-
-    if (!_x_demux_check_extension (mrl, extensions)) {
-      return NULL;
-    }
-  }
-  break;
-
+  case METHOD_BY_MRL:
   case METHOD_EXPLICIT:
   break;
 
@@ -205,7 +196,7 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen,
   this->demux_plugin.send_headers      = demux_image_send_headers;
   this->demux_plugin.send_chunk        = demux_image_send_chunk;
   this->demux_plugin.seek              = demux_image_seek;
-  this->demux_plugin.dispose           = demux_image_dispose;
+  this->demux_plugin.dispose           = default_demux_plugin_dispose;
   this->demux_plugin.get_status        = demux_image_get_status;
   this->demux_plugin.get_stream_length = demux_image_get_stream_length;
   this->demux_plugin.get_capabilities  = demux_image_get_capabilities;
@@ -222,41 +213,17 @@ static demux_plugin_t *open_plugin (demux_class_t *class_gen,
 /*
  * image demuxer class
  */
-
-static const char *get_description (demux_class_t *this_gen) {
-  return "image demux plugin";
-}
-
-static const char *get_identifier (demux_class_t *this_gen) {
-  return "imagedmx";
-}
-
-static const char *get_extensions (demux_class_t *this_gen) {
-  return "png gif jpg jpeg";
-}
-
-static const char *get_mimetypes (demux_class_t *this_gen) {
-  return NULL;
-}
-
-static void class_dispose (demux_class_t *this_gen) {
-  demux_image_class_t *this = (demux_image_class_t *) this_gen;
-
-  lprintf("class closed\n");
-  free (this);
-}
-
 static void *init_class (xine_t *xine, void *data) {
   demux_image_class_t     *this;
 
   this  = calloc(1, sizeof(demux_image_class_t));
 
   this->demux_class.open_plugin     = open_plugin;
-  this->demux_class.get_description = get_description;
-  this->demux_class.get_identifier  = get_identifier;
-  this->demux_class.get_mimetypes   = get_mimetypes;
-  this->demux_class.get_extensions  = get_extensions;
-  this->demux_class.dispose         = class_dispose;
+  this->demux_class.description     = N_("image demux plugin");
+  this->demux_class.identifier      = "imagedmx";
+  this->demux_class.mimetypes       = NULL;
+  this->demux_class.extensions      = "png gif jpg jpeg bmp";
+  this->demux_class.dispose         = default_demux_class_dispose;
 
   lprintf("class opened\n");
   return this;
@@ -271,6 +238,6 @@ static const demuxer_info_t demux_info_image = {
 
 const plugin_info_t xine_plugin_info[] EXPORTED = {
   /* type, API, "name", version, special_info, init_function */
-  { PLUGIN_DEMUX, 26, "image", XINE_VERSION_CODE, &demux_info_image, init_class },
+  { PLUGIN_DEMUX, 27, "image", XINE_VERSION_CODE, &demux_info_image, init_class },
   { PLUGIN_NONE, 0, "", 0, NULL, NULL }
 };
